@@ -209,14 +209,14 @@ class GenerateVideoClient:
         width: int = 480,
         height: int = 832,
         length: int = 81,
-        steps: int = 10,
+        steps: int = 4,
         seed: int = 42,
-        cfg: float = 2.0,
+        cfg: float = 1.0,
         context_overlap: int = 48,
         lora_pairs: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Generate video from image
+        Generate video from image (Remix NSFW I2V + Lightning defaults).
         
         Args:
             image_path: Image file path
@@ -225,11 +225,11 @@ class GenerateVideoClient:
             width: Output width
             height: Output height
             length: Number of frames
-            steps: Number of steps
+            steps: Denoising steps (Lightning default: 4)
             seed: Seed value
-            cfg: CFG scale
+            cfg: CFG scale (Lightning default: 1.0)
             context_overlap: Context overlap
-            lora_pairs: LoRA settings list (max 4)
+            lora_pairs: Extra LoRA pairs (max 4); Lightning is already baked
         
         Returns:
             Job result dictionary
@@ -289,14 +289,14 @@ class GenerateVideoClient:
         width: int = 480,
         height: int = 832,
         length: int = 81,
-        steps: int = 10,
+        steps: int = 4,
         seed: int = 42,
-        cfg: float = 2.0,
+        cfg: float = 1.0,
         context_overlap: int = 48,
         lora_pairs: Optional[List[Dict[str, Any]]] = None
     ) -> Dict[str, Any]:
         """
-        Batch process all image files in folder
+        Batch process all image files in folder (Lightning defaults: steps=4, cfg=1.0).
         
         Args:
             image_folder_path: Folder path containing image files
@@ -307,11 +307,11 @@ class GenerateVideoClient:
             width: Output width
             height: Output height
             length: Number of frames
-            steps: Number of steps
+            steps: Denoising steps (default 4)
             seed: Seed value
-            cfg: CFG scale
+            cfg: CFG scale (default 1.0)
             context_overlap: Context overlap
-            lora_pairs: LoRA settings list
+            lora_pairs: Extra LoRA settings list
         
         Returns:
             Batch processing result dictionary
@@ -425,9 +425,9 @@ def main():
         width=480,
         height=832,
         length=81,
-        steps=10,
+        steps=4,
         seed=42,
-        cfg=2.0
+        cfg=1.0
     )
     
     if result1.get('status') == 'COMPLETED':
@@ -455,9 +455,9 @@ def main():
         width=480,
         height=832,
         length=81,
-        steps=10,
+        steps=4,
         seed=42,
-        cfg=2.0,
+        cfg=1.0,
         lora_pairs=lora_pairs
     )
     

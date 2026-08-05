@@ -1,7 +1,7 @@
 {
   "122": {
     "inputs": {
-      "model": "Wan2_2-I2V-A14B-HIGH_fp8_e4m3fn_scaled_KJ.safetensors",
+      "model": "Wan2.2_Remix_NSFW_i2v_14b_high_lighting_fp8_e4m3fn_v3.0.safetensors",
       "base_precision": "bf16",
       "quantization": "fp8_e4m3fn",
       "load_device": "offload_device",
@@ -10,7 +10,7 @@
     },
     "class_type": "WanVideoModelLoader",
     "_meta": {
-      "title": "WanVideo Model Loader"
+      "title": "WanVideo Model Loader (HIGH Remix NSFW)"
     }
   },
   "129": {
@@ -86,14 +86,14 @@
   },
   "136": {
     "inputs": {
-      "model_name": "umt5-xxl-enc-bf16.safetensors",
-      "precision": "bf16",
+      "model_name": "nsfw_wan_umt5-xxl_fp8_scaled.safetensors",
+      "precision": "fp16",
       "load_device": "offload_device",
-      "quantization": "disabled"
+      "quantization": "fp8_e4m3fn"
     },
     "class_type": "LoadWanVideoT5TextEncoder",
     "_meta": {
-      "title": "WanVideo T5 Text Encoder Loader"
+      "title": "WanVideo T5 Text Encoder Loader (NSFW)"
     }
   },
   "171": {
@@ -165,10 +165,10 @@
         "570",
         0
       ],
-      "shift": 9.000000000000002,
+      "shift": 5,
       "seed": 903379117355889,
       "force_offload": true,
-      "scheduler": "dpm++_sde",
+      "scheduler": "euler",
       "riflex_freq_index": 0,
       "denoise_strength": 1,
       "batched_cfg": false,
@@ -288,11 +288,11 @@
         "569",
         0
       ],
-      "cfg": 1.0000000000000002,
-      "shift": 9.000000000000002,
+      "cfg": 1.0,
+      "shift": 5,
       "seed": 391376475114947,
       "force_offload": true,
-      "scheduler": "dpm++_sde",
+      "scheduler": "euler",
       "riflex_freq_index": 0,
       "denoise_strength": 1,
       "batched_cfg": false,
@@ -366,7 +366,7 @@
   },
   "549": {
     "inputs": {
-      "model": "Wan2_2-I2V-A14B-LOW_fp8_e4m3fn_scaled_KJ.safetensors",
+      "model": "Wan2.2_Remix_NSFW_i2v_14b_low_lighting_fp8_e4m3fn_v3.0.safetensors",
       "base_precision": "bf16",
       "quantization": "fp8_e4m3fn",
       "load_device": "offload_device",
@@ -379,7 +379,7 @@
     },
     "class_type": "WanVideoModelLoader",
     "_meta": {
-      "title": "WanVideo Model Loader"
+      "title": "WanVideo Model Loader (LOW Remix NSFW)"
     }
   },
   "552": {
@@ -452,11 +452,11 @@
   },
   "569": {
     "inputs": {
-      "value": 8
+      "value": 4
     },
     "class_type": "INTConstant",
     "_meta": {
-      "title": "INT Constant"
+      "title": "Steps (Lightning default 4)"
     }
   },
   "570": {
@@ -465,8 +465,8 @@
         "569",
         0
       ],
-      "cfg_scale_start": 2,
-      "cfg_scale_end": 2,
+      "cfg_scale_start": 1,
+      "cfg_scale_end": 1,
       "interpolation": "linear",
       "start_percent": 0,
       "end_percent": 0.01
@@ -478,11 +478,11 @@
   },
   "575": {
     "inputs": {
-      "value": 4
+      "value": 2
     },
     "class_type": "INTConstant",
     "_meta": {
-      "title": "INT Constant"
+      "title": "Split step (Lightning default 2)"
     }
   },
   "612": {
