@@ -138,10 +138,44 @@ def load_workflow(workflow_path):
         return json.load(file)
 
 
+def ensure_models():
+    """Download missing weights on first job (slim images). No-op if already present."""
+    if os.getenv("SKIP_MODEL_DOWNLOAD", "0") == "1":
+        logger.info("SKIP_MODEL_DOWNLOAD=1; not fetching weights")
+        return
+    script = "/download_models.sh"
+    if not os.path.isfile(script):
+        logger.warning(f"Model script missing: {script}")
+        return
+    logger.info("Ensuring model weights (download_models.sh)...")
+    # Long timeout: ~45GB on cold start
+    result = subprocess.run(
+        ["bash", script],
+        capture_output=True,
+        text=True,
+        timeout=int(os.getenv("MODEL_DOWNLOAD_TIMEOUT", "3600")),
+    )
+    if result.stdout:
+        logger.info(result.stdout[-4000:] if len(result.stdout) > 4000 else result.stdout)
+    if result.returncode != 0:
+        logger.error(result.stderr[-4000:] if result.stderr else "download_models failed")
+        raise Exception(f"Model download failed (exit {result.returncode}): {result.stderr[-500:]}")
+    logger.info("Model weights ready")
+
+
 def handler(job):
     job_input = job.get("input", {})
     logger.info(f"Received job input keys: {list(job_input.keys())}")
     task_id = f"task_{uuid.uuid4()}"
+
+    # Lightweight ping — verifies worker is ready without models / ComfyUI workflow
+    if job_input.get("ping") is True or job_input.get("action") == "ping":
+        return {
+            "ok": True,
+            "ping": True,
+            "message": "worker handler alive",
+            "models_skip": os.getenv("SKIP_MODEL_DOWNLOAD", "0"),
+        }
 
     # Reject FLF2V inputs explicitly (I2V-only product)
     if any(k in job_input for k in ("end_image_path", "end_image_url", "end_image_base64")):
@@ -149,6 +183,16 @@ def handler(job):
             "error": "FLF2V is not supported. This endpoint is image-to-video only. "
                      "Do not send end_image_path / end_image_url / end_image_base64."
         }
+
+    prompt_text = job_input.get("prompt")
+    if not prompt_text:
+        return {"error": "prompt is required"}
+
+    # Slim image: fetch weights on first real job so entrypoint can register quickly
+    try:
+        ensure_models()
+    except Exception as e:
+        return {"error": str(e)}
 
     # Image: path | url | base64
     if "image_path" in job_input:
@@ -176,9 +220,6 @@ def handler(job):
     width = job_input.get("width", 480)
     height = job_input.get("height", 832)
     context_overlap = int(job_input.get("context_overlap", 48))
-    prompt_text = job_input.get("prompt")
-    if not prompt_text:
-        return {"error": "prompt is required"}
 
     negative_prompt = job_input.get("negative_prompt", DEFAULT_NEGATIVE)
 
