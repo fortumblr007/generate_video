@@ -1,7 +1,4 @@
-import runpod
-from runpod.serverless.utils import rp_upload
 import os
-import websocket
 import base64
 import json
 import uuid
@@ -12,6 +9,12 @@ import binascii
 import subprocess
 import time
 
+# Heavy deps optional for smoke/ping (no ComfyUI needed)
+try:
+    import websocket
+except ImportError:  # pragma: no cover
+    websocket = None
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -19,7 +22,11 @@ server_address = os.getenv('SERVER_ADDRESS', '127.0.0.1')
 client_id = str(uuid.uuid4())
 
 # I2V-only workflow (Remix NSFW + Lightning). FLF2V is not supported.
-WORKFLOW_FILE = "/new_Wan22_api.json"
+# Override with WORKFLOW_FILE for local smoke tests (repo-relative path).
+WORKFLOW_FILE = os.getenv(
+    "WORKFLOW_FILE",
+    "/new_Wan22_api.json" if os.path.isfile("/new_Wan22_api.json") else "new_Wan22_api.json",
+)
 
 DEFAULT_NEGATIVE = (
     "bright tones, overexposed, static, blurred details, subtitles, style, works, "
@@ -338,4 +345,8 @@ def handler(job):
     return {"error": "Video not found."}
 
 
-runpod.serverless.start({"handler": handler})
+if __name__ == "__main__":
+    # Production: RunPod Serverless entrypoint
+    import runpod
+
+    runpod.serverless.start({"handler": handler})
