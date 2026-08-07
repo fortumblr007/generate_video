@@ -23,6 +23,10 @@ mkdir -p \
   "$MODELS_ROOT/vae" \
   "$MODELS_ROOT/clip_vision"
 
+# Prefer aria2 multi-connection (-x/-s); fall back to wget.
+# ARIA2_CONNECTIONS defaults to 16.
+ARIA2_CONNECTIONS="${ARIA2_CONNECTIONS:-16}"
+
 download() {
   local url="$1"
   local dest="$2"
@@ -31,10 +35,26 @@ download() {
     return 0
   fi
   echo "[models] downloading: $dest"
-  local tmp="${dest}.part"
-  rm -f "$tmp"
-  wget -q --show-progress --progress=dot:giga -O "$tmp" "$url"
-  mv -f "$tmp" "$dest"
+  local dir
+  dir="$(dirname "$dest")"
+  local base
+  base="$(basename "$dest")"
+  mkdir -p "$dir"
+  if command -v aria2c >/dev/null 2>&1; then
+    aria2c -c \
+      -x "$ARIA2_CONNECTIONS" -s "$ARIA2_CONNECTIONS" \
+      --min-split-size=1M \
+      --file-allocation=none \
+      --max-tries=0 --retry-wait=3 \
+      --timeout=60 --connect-timeout=30 \
+      -d "$dir" -o "$base" \
+      "$url"
+  else
+    local tmp="${dest}.part"
+    rm -f "$tmp"
+    wget -c -q --show-progress --progress=dot:giga -O "$tmp" "$url"
+    mv -f "$tmp" "$dest"
+  fi
   echo "[models] done: $dest"
 }
 
