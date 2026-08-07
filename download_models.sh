@@ -1,9 +1,21 @@
 #!/bin/bash
 # Download Remix NSFW I2V + Lightning + NSFW UMT5 assets if missing.
 # Safe to re-run; skips files that already exist (Network Volume friendly).
+#
+# MODELS_ROOT defaults:
+#   1) $MODELS_ROOT if set
+#   2) /runpod-volume/models if that dir exists or parent volume is mounted
+#   3) /ComfyUI/models otherwise
 set -euo pipefail
 
-MODELS_ROOT="${MODELS_ROOT:-/ComfyUI/models}"
+if [ -z "${MODELS_ROOT:-}" ]; then
+  if [ -d /runpod-volume ]; then
+    MODELS_ROOT=/runpod-volume/models
+  else
+    MODELS_ROOT=/ComfyUI/models
+  fi
+fi
+
 mkdir -p \
   "$MODELS_ROOT/diffusion_models" \
   "$MODELS_ROOT/loras" \
@@ -19,7 +31,6 @@ download() {
     return 0
   fi
   echo "[models] downloading: $dest"
-  # partial-safe: write to .part then rename
   local tmp="${dest}.part"
   rm -f "$tmp"
   wget -q --show-progress --progress=dot:giga -O "$tmp" "$url"
@@ -57,4 +68,4 @@ download \
   "https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors" \
   "$MODELS_ROOT/vae/Wan2_1_VAE_bf16.safetensors"
 
-echo "[models] all required assets present."
+echo "[models] all required assets present under $MODELS_ROOT"

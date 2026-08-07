@@ -138,8 +138,16 @@ def load_workflow(workflow_path):
         return json.load(file)
 
 
+def models_root():
+    if os.getenv("MODELS_ROOT"):
+        return os.environ["MODELS_ROOT"]
+    if os.path.isdir("/runpod-volume"):
+        return "/runpod-volume/models"
+    return "/ComfyUI/models"
+
+
 def ensure_models():
-    """Download missing weights on first job (slim images). No-op if already present."""
+    """Download missing weights into MODELS_ROOT (Network Volume preferred)."""
     if os.getenv("SKIP_MODEL_DOWNLOAD", "0") == "1":
         logger.info("SKIP_MODEL_DOWNLOAD=1; not fetching weights")
         return
@@ -147,13 +155,16 @@ def ensure_models():
     if not os.path.isfile(script):
         logger.warning(f"Model script missing: {script}")
         return
-    logger.info("Ensuring model weights (download_models.sh)...")
-    # Long timeout: ~45GB on cold start
+    root = models_root()
+    env = os.environ.copy()
+    env["MODELS_ROOT"] = root
+    logger.info(f"Ensuring model weights under {root} ...")
     result = subprocess.run(
         ["bash", script],
         capture_output=True,
         text=True,
         timeout=int(os.getenv("MODEL_DOWNLOAD_TIMEOUT", "3600")),
+        env=env,
     )
     if result.stdout:
         logger.info(result.stdout[-4000:] if len(result.stdout) > 4000 else result.stdout)
@@ -170,10 +181,13 @@ def handler(job):
 
     # Lightweight ping — verifies worker is ready without models / ComfyUI workflow
     if job_input.get("ping") is True or job_input.get("action") == "ping":
+        root = models_root()
         return {
             "ok": True,
             "ping": True,
             "message": "worker handler alive",
+            "models_root": root,
+            "volume_mounted": os.path.isdir("/runpod-volume"),
             "models_skip": os.getenv("SKIP_MODEL_DOWNLOAD", "0"),
         }
 

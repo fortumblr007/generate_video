@@ -46,47 +46,83 @@ Sources:
 
 ---
 
-## Build & push
+## Architecture (volume-first — avoid big pushes)
 
-**Slim (recommended for Docker Hub):** ~24 GB image; weights download on first worker start (or mount a Network Volume).
+| Layer | Image / storage | Size | How often |
+|-------|-----------------|------|-----------|
+| **Base** | `fortumblr007/video-gen-base:1.0` | ~CUDA+PyTorch | Almost never |
+| **Runtime** | `fortumblr007/generate-video-runtime:1.0` | ~24 GB ComfyUI+nodes | Rarely (node upgrades) |
+| **App** | `fortumblr007/generate-video-nsfw-i2v:app` | **MBs** (handler, workflow, scripts) | **Every code change** |
+| **Models** | **Network Volume** `/runpod-volume/models` | ~45 GB | Seed once |
+
+Day-to-day you only rebuild/push **Dockerfile.app**. Docker Hub already has the runtime layers; push is tiny.
+
+### Build & push
 
 ```bash
-# Base (once)
+# 1) Base — once
 docker build -f base.Dockerfile -t fortumblr007/video-gen-base:1.0 .
 docker push fortumblr007/video-gen-base:1.0
 
-# App without baked weights (pushes cleanly from a laptop)
-docker build --build-arg BAKE_MODELS=0 -t fortumblr007/generate-video-nsfw-i2v:1.0-slim .
-docker push fortumblr007/generate-video-nsfw-i2v:1.0-slim
+# 2) Runtime (ComfyUI + nodes, no weights) — rare
+docker build -f Dockerfile.runtime -t fortumblr007/generate-video-runtime:1.0 .
+docker push fortumblr007/generate-video-runtime:1.0
+
+# 3) App (handler/workflow only) — every code change
+docker build -f Dockerfile.app -t fortumblr007/generate-video-nsfw-i2v:app .
+docker push fortumblr007/generate-video-nsfw-i2v:app
 ```
 
-**Full bake** (all HF weights in the image, ~90 GB; needs lots of RAM/disk and a stable upload):
+### Network Volume (100 GB) — seed once
+
+1. RunPod → **Storage** → **Network Volume** → create **100 GB** in the **same region** as the endpoint.
+2. Attach volume to a temporary **GPU or CPU Pod** (mount path `/runpod-volume`).
+3. On the Pod:
 
 ```bash
-docker build --build-arg BAKE_MODELS=1 -t fortumblr007/generate-video-nsfw-i2v:1.0 .
-docker push fortumblr007/generate-video-nsfw-i2v:1.0
+git clone https://github.com/fortumblr007/generate_video.git
+cd generate_video
+bash seed_volume.sh
+# writes ~45GB under /runpod-volume/models/...
 ```
 
-Published tags (this fork):
+4. Detach from Pod; attach the **same volume** to the **Serverless endpoint**.
+5. Optional env: `SKIP_MODEL_DOWNLOAD=1` after the volume is fully seeded.
 
-| Tag | Notes |
-|-----|--------|
-| `fortumblr007/generate-video-nsfw-i2v:1.0-slim` | ComfyUI + nodes; models via `download_models.sh` at start |
-| `fortumblr007/generate-video-nsfw-i2v:slim` | Same digest as `1.0-slim` |
-| `fortumblr007/video-gen-base:1.0` | CUDA 12.8 + PyTorch cu128 runtime base |
+Layout:
+
+```text
+/runpod-volume/models/diffusion_models/   # Remix DiTs
+/runpod-volume/models/loras/              # Lightning
+/runpod-volume/models/text_encoders/      # NSFW UMT5
+/runpod-volume/models/vae/
+/runpod-volume/models/clip_vision/
+/runpod-volume/loras/                     # optional extra user LoRAs
+```
+
+Entrypoint symlinks `/ComfyUI/models/*` → volume dirs and sets `MODELS_ROOT`.
 
 ### RunPod Serverless endpoint
 
 | Setting | Value |
 |---------|--------|
-| Container image | `fortumblr007/generate-video-nsfw-i2v:1.0-slim` |
-| GPU | 24 GB+ VRAM (Ada / Hopper / Blackwell all fine with this base) |
-| Container disk | ≥ **80 GB** for slim (models download into the container), or ≥ **20 GB** if models live on a Network Volume |
-| Max workers / idle | First cold start downloads ~45 GB of weights — raise **execution / idle** timeouts accordingly |
-| Network volume | **Recommended:** pre-seed `/ComfyUI/models` (or mount over it) so workers skip HuggingFace downloads. Extra user LoRAs can still go under `/loras` |
-| Env (optional) | `SKIP_MODEL_DOWNLOAD=1` if you fully manage weights yourself |
+| Container image | `fortumblr007/generate-video-nsfw-i2v:app` |
+| GPU | 24 GB+ VRAM |
+| Container disk | **20–40 GB** is enough when models are on the volume |
+| Network volume | **100 GB**, same datacenter, mounted (default `/runpod-volume`) |
+| Env (optional) | `SKIP_MODEL_DOWNLOAD=1` after seed; `MODELS_ROOT=/runpod-volume/models` |
+| Smoke test | `{"input":{"ping":true}}` → should report `volume_mounted: true` |
 
-Base image: `fortumblr007/video-gen-base:1.0` (not the upstream Blackwell-only image).
+Do **not** bake weights into the image (~90 GB). Keep weights on the volume.
+
+Published tags:
+
+| Tag | Notes |
+|-----|--------|
+| `fortumblr007/video-gen-base:1.0` | CUDA 12.8 + PyTorch cu128 |
+| `fortumblr007/generate-video-runtime:1.0` | ComfyUI + nodes (push rarely) |
+| `fortumblr007/generate-video-nsfw-i2v:app` | Thin app (push often) |
+| `…:1.0-slim` | Older all-in-one slim (superseded by runtime+app) |
 
 ---
 
