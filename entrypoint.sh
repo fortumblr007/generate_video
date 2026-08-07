@@ -3,6 +3,13 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
+# Ensure model weights exist (no-op if baked into image or mounted via Network Volume).
+# Set SKIP_MODEL_DOWNLOAD=1 to skip (e.g. you mount models yourself).
+if [ "${SKIP_MODEL_DOWNLOAD:-0}" != "1" ]; then
+  echo "Checking / downloading model weights..."
+  /download_models.sh
+fi
+
 # Start ComfyUI in the background (sage-attn if available)
 echo "Starting ComfyUI in the background..."
 if python -c "import sageattention" 2>/dev/null; then

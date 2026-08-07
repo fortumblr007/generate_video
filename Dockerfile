@@ -49,33 +49,24 @@ RUN cd /ComfyUI/custom_nodes && \
     cd ComfyUI-AdaptiveWindowSize/ComfyUI-AdaptiveWindowSize && \
     mv * ../
 
-# --- Diffusion models: Remix NSFW I2V v3.0 (fp8) ---
+# Model dirs always present. Large HF weights are optional at build time.
+# BAKE_MODELS=1 (default): bake weights into the image (large ~90GB, hard to push from low-RAM hosts).
+# BAKE_MODELS=0: slim image; download_models.sh runs at container start (or mount a Network Volume).
 RUN mkdir -p /ComfyUI/models/diffusion_models /ComfyUI/models/loras \
     /ComfyUI/models/text_encoders /ComfyUI/models/vae /ComfyUI/models/clip_vision
 
-RUN wget -q https://huggingface.co/FX-FeiHou/wan2.2-Remix/resolve/main/NSFW/Wan2.2_Remix_NSFW_i2v_14b_high_lighting_fp8_e4m3fn_v3.0.safetensors \
-    -O /ComfyUI/models/diffusion_models/Wan2.2_Remix_NSFW_i2v_14b_high_lighting_fp8_e4m3fn_v3.0.safetensors
-RUN wget -q https://huggingface.co/FX-FeiHou/wan2.2-Remix/resolve/main/NSFW/Wan2.2_Remix_NSFW_i2v_14b_low_lighting_fp8_e4m3fn_v3.0.safetensors \
-    -O /ComfyUI/models/diffusion_models/Wan2.2_Remix_NSFW_i2v_14b_low_lighting_fp8_e4m3fn_v3.0.safetensors
+COPY download_models.sh /download_models.sh
+RUN chmod +x /download_models.sh
 
-# --- Lightning I2V 4-step LoRAs (stable local names for workflow) ---
-RUN wget -q https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors \
-    -O /ComfyUI/models/loras/high_noise_model.safetensors
-RUN wget -q https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors \
-    -O /ComfyUI/models/loras/low_noise_model.safetensors
-
-# --- Text encoder: NSFW UMT5 (fp8 scaled) ---
-RUN wget -q https://huggingface.co/NSFW-API/NSFW-Wan-UMT5-XXL/resolve/main/nsfw_wan_umt5-xxl_fp8_scaled.safetensors \
-    -O /ComfyUI/models/text_encoders/nsfw_wan_umt5-xxl_fp8_scaled.safetensors
-
-# --- VAE + CLIP vision ---
-RUN wget -q https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors \
-    -O /ComfyUI/models/clip_vision/clip_vision_h.safetensors
-RUN wget -q https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors \
-    -O /ComfyUI/models/vae/Wan2_1_VAE_bf16.safetensors
+ARG BAKE_MODELS=1
+RUN if [ "$BAKE_MODELS" = "1" ]; then \
+      /download_models.sh; \
+    else \
+      echo "BAKE_MODELS=0: skipping weight bake (runtime download / volume)"; \
+    fi
 
 COPY . .
 COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
-RUN chmod +x /entrypoint.sh
+RUN chmod +x /entrypoint.sh /download_models.sh
 
 CMD ["/entrypoint.sh"]

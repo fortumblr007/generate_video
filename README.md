@@ -48,23 +48,45 @@ Sources:
 
 ## Build & push
 
+**Slim (recommended for Docker Hub):** ~24 GB image; weights download on first worker start (or mount a Network Volume).
+
 ```bash
-docker build -t YOUR_DOCKERHUB_USER/generate-video-nsfw-i2v:1.0 .
-docker push YOUR_DOCKERHUB_USER/generate-video-nsfw-i2v:1.0
+# Base (once)
+docker build -f base.Dockerfile -t fortumblr007/video-gen-base:1.0 .
+docker push fortumblr007/video-gen-base:1.0
+
+# App without baked weights (pushes cleanly from a laptop)
+docker build --build-arg BAKE_MODELS=0 -t fortumblr007/generate-video-nsfw-i2v:1.0-slim .
+docker push fortumblr007/generate-video-nsfw-i2v:1.0-slim
 ```
 
-Build machine needs **~150–200 GB** free disk (model downloads + layers). GPU not required for build.
+**Full bake** (all HF weights in the image, ~90 GB; needs lots of RAM/disk and a stable upload):
+
+```bash
+docker build --build-arg BAKE_MODELS=1 -t fortumblr007/generate-video-nsfw-i2v:1.0 .
+docker push fortumblr007/generate-video-nsfw-i2v:1.0
+```
+
+Published tags (this fork):
+
+| Tag | Notes |
+|-----|--------|
+| `fortumblr007/generate-video-nsfw-i2v:1.0-slim` | ComfyUI + nodes; models via `download_models.sh` at start |
+| `fortumblr007/generate-video-nsfw-i2v:slim` | Same digest as `1.0-slim` |
+| `fortumblr007/video-gen-base:1.0` | CUDA 12.8 + PyTorch cu128 runtime base |
 
 ### RunPod Serverless endpoint
 
 | Setting | Value |
 |---------|--------|
-| Container image | `YOUR_DOCKERHUB_USER/generate-video-nsfw-i2v:1.0` |
-| GPU | 24 GB+ (match base image arch: this Dockerfile uses Blackwell base) |
-| Container disk | ≥ 180 GB |
-| Network volume | Optional — only for **extra** user LoRAs under `/loras` |
+| Container image | `fortumblr007/generate-video-nsfw-i2v:1.0-slim` |
+| GPU | 24 GB+ VRAM (Ada / Hopper / Blackwell all fine with this base) |
+| Container disk | ≥ **80 GB** for slim (models download into the container), or ≥ **20 GB** if models live on a Network Volume |
+| Max workers / idle | First cold start downloads ~45 GB of weights — raise **execution / idle** timeouts accordingly |
+| Network volume | **Recommended:** pre-seed `/ComfyUI/models` (or mount over it) so workers skip HuggingFace downloads. Extra user LoRAs can still go under `/loras` |
+| Env (optional) | `SKIP_MODEL_DOWNLOAD=1` if you fully manage weights yourself |
 
-Base image: `wlsdml1114/engui_genai-base_blackwell:1.1` — prefer **Blackwell** GPUs or change `FROM` for Ada/H100 variants.
+Base image: `fortumblr007/video-gen-base:1.0` (not the upstream Blackwell-only image).
 
 ---
 
