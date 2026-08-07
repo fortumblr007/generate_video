@@ -1,8 +1,7 @@
 # RunPod serverless worker: Wan2.2 Remix NSFW I2V + Lightning (Kijai wrapper)
-FROM wlsdml1114/engui_genai-base_blackwell:1.1 as runtime
-
-RUN pip install -U "huggingface_hub[hf_transfer]"
-RUN pip install runpod websocket-client
+# Base: fortumblr007/video-gen-base (CUDA 12.8 + PyTorch). Build base first:
+#   docker build -f base.Dockerfile -t fortumblr007/video-gen-base:1.0 .
+FROM fortumblr007/video-gen-base:1.0 AS runtime
 
 WORKDIR /
 

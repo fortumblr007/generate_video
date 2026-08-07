@@ -3,9 +3,15 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# Start ComfyUI in the background
+# Start ComfyUI in the background (sage-attn if available)
 echo "Starting ComfyUI in the background..."
-python /ComfyUI/main.py --listen --use-sage-attention &
+if python -c "import sageattention" 2>/dev/null; then
+  python /ComfyUI/main.py --listen --use-sage-attention &
+else
+  echo "sageattention not found; starting ComfyUI without --use-sage-attention"
+  python /ComfyUI/main.py --listen &
+fi
+
 
 # Wait for ComfyUI to be ready
 echo "Waiting for ComfyUI to be ready..."
