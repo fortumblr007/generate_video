@@ -53,40 +53,13 @@ for d in diffusion_models loras text_encoders vae clip_vision; do
   ln -sfn "$MODELS_ROOT/$d" "/ComfyUI/models/$d"
 done
 
-# Fast multi-connection downloads (aria2, 16 connections per file, up to 4 files parallel)
-if ! command -v aria2c >/dev/null 2>&1; then
-  apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq aria2
+# One-at-a-time multi-connection downloads (default 8 threads, -j1)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/pod_aria2_dl.sh" ]; then
+  ARIA2_CONNECTIONS="${ARIA2_CONNECTIONS:-8}" MODELS_ROOT="$MODELS_ROOT" bash "$SCRIPT_DIR/pod_aria2_dl.sh"
+else
+  ARIA2_CONNECTIONS="${ARIA2_CONNECTIONS:-8}" MODELS_ROOT="$MODELS_ROOT" bash download_models.sh
 fi
-ARIA2_X="${ARIA2_CONNECTIONS:-16}"
-cat > /tmp/models.aria2 <<EOF
-https://huggingface.co/FX-FeiHou/wan2.2-Remix/resolve/main/NSFW/Wan2.2_Remix_NSFW_i2v_14b_high_lighting_fp8_e4m3fn_v3.0.safetensors
-  dir=${MODELS_ROOT}/diffusion_models
-  out=Wan2.2_Remix_NSFW_i2v_14b_high_lighting_fp8_e4m3fn_v3.0.safetensors
-https://huggingface.co/FX-FeiHou/wan2.2-Remix/resolve/main/NSFW/Wan2.2_Remix_NSFW_i2v_14b_low_lighting_fp8_e4m3fn_v3.0.safetensors
-  dir=${MODELS_ROOT}/diffusion_models
-  out=Wan2.2_Remix_NSFW_i2v_14b_low_lighting_fp8_e4m3fn_v3.0.safetensors
-https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/high_noise_model.safetensors
-  dir=${MODELS_ROOT}/loras
-  out=high_noise_model.safetensors
-https://huggingface.co/lightx2v/Wan2.2-Lightning/resolve/main/Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors
-  dir=${MODELS_ROOT}/loras
-  out=low_noise_model.safetensors
-https://huggingface.co/NSFW-API/NSFW-Wan-UMT5-XXL/resolve/main/nsfw_wan_umt5-xxl_fp8_scaled.safetensors
-  dir=${MODELS_ROOT}/text_encoders
-  out=nsfw_wan_umt5-xxl_fp8_scaled.safetensors
-https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/resolve/main/split_files/clip_vision/clip_vision_h.safetensors
-  dir=${MODELS_ROOT}/clip_vision
-  out=clip_vision_h.safetensors
-https://huggingface.co/Kijai/WanVideo_comfy/resolve/main/Wan2_1_VAE_bf16.safetensors
-  dir=${MODELS_ROOT}/vae
-  out=Wan2_1_VAE_bf16.safetensors
-EOF
-echo "aria2c models -x${ARIA2_X} -s${ARIA2_X} -j4"
-aria2c -i /tmp/models.aria2 \
-  -x "$ARIA2_X" -s "$ARIA2_X" -j 4 \
-  --file-allocation=none --continue=true \
-  --max-tries=0 --retry-wait=3 --timeout=60 --connect-timeout=30 \
-  --min-split-size=1M --summary-interval=15
 echo "MODELS_DONE"
 du -sh "$MODELS_ROOT"/* || true
 

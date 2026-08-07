@@ -24,8 +24,8 @@ mkdir -p \
   "$MODELS_ROOT/clip_vision"
 
 # Prefer aria2 multi-connection (-x/-s); fall back to wget.
-# ARIA2_CONNECTIONS defaults to 16.
-ARIA2_CONNECTIONS="${ARIA2_CONNECTIONS:-16}"
+# One file at a time; ARIA2_CONNECTIONS defaults to 8.
+ARIA2_CONNECTIONS="${ARIA2_CONNECTIONS:-8}"
 
 download() {
   local url="$1"

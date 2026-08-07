@@ -1,12 +1,11 @@
 #!/bin/bash
-# Fast multi-connection download of all required models (aria2 -x16 -s16).
+# Download required models ONE FILE AT A TIME with aria2 multi-connection.
+# Default: -x8 -s8 -j1 (8 threads per file, never parallel files).
 #
 # IMPORTANT: Prefer a Network Volume — container disks fill easily (~45GB+ weights).
 #
-#   # On a Pod with Network Volume mounted at /runpod-volume:
 #   MODELS_ROOT=/runpod-volume/models bash pod_aria2_dl.sh
-#
-#   # Or default: /runpod-volume/models if present, else /workspace/models
+#   ARIA2_CONNECTIONS=8 bash pod_aria2_dl.sh   # default
 #
 # Requires: aria2c (installs .deb if missing), curl, python3
 set +e
@@ -144,20 +143,61 @@ if ! command -v aria2c >/dev/null 2>&1; then
   exit 1
 fi
 
-# -x16 -s16 = 16 connections per file; -j4 = 4 files at once
-# If HF CDN returns many 403s, retry with: ARIA2_X=8 ARIA2_J=2
-ARIA2_X="${ARIA2_CONNECTIONS:-16}"
-ARIA2_J="${ARIA2_PARALLEL_FILES:-4}"
-echo "Starting aria2c -x${ARIA2_X} -s${ARIA2_X} -j${ARIA2_J} → $MODELS_ROOT"
-nohup aria2c -i /tmp/models_run.aria2 -x "$ARIA2_X" -s "$ARIA2_X" -j "$ARIA2_J" \
-  --file-allocation=none --continue=true --max-tries=0 --retry-wait=2 \
-  --timeout=60 --connect-timeout=30 --min-split-size=1M \
-  --summary-interval=10 --console-log-level=notice \
-  > /tmp/aria2_models.log 2>&1 &
-echo ARIA2_PID=$!
-sleep 4
-ps -C aria2c -o pid,etime,cmd 2>/dev/null | head -5
-echo "Log: tail -f /tmp/aria2_models.log"
-tail -15 /tmp/aria2_models.log 2>/dev/null
+# One file at a time (-j1); 8 connections per file (-x8 -s8).
+# Sequential loop so disk usage and failures are easier to control.
+ARIA2_X="${ARIA2_CONNECTIONS:-8}"
+ARIA2_J=1
+LOG=/tmp/aria2_models.log
+: > "$LOG"
+echo "Sequential download: one file at a time, aria2 -x${ARIA2_X} -s${ARIA2_X} -j${ARIA2_J}"
+echo "MODELS_ROOT=$MODELS_ROOT"
+echo "Log: $LOG"
+
+# Parse models_run.aria2 into sequential blocks and download each fully before next
+python3 - <<'PY' > /tmp/models_queue.txt
+from pathlib import Path
+raw = Path("/tmp/models_run.aria2").read_text().strip()
+if not raw:
+    raise SystemExit(0)
+blocks, cur = [], []
+for line in raw.splitlines():
+    if line.startswith("http") and cur:
+        blocks.append("\n".join(cur))
+        cur = [line]
+    else:
+        cur.append(line)
+if cur:
+    blocks.append("\n".join(cur))
+for i, b in enumerate(blocks):
+    Path(f"/tmp/model_one_{i}.aria2").write_text(b.strip() + "\n")
+    print(i)
+PY
+
+n=0
+while [ -f "/tmp/model_one_${n}.aria2" ]; do
+  url=$(head -1 "/tmp/model_one_${n}.aria2")
+  out=$(grep 'out=' "/tmp/model_one_${n}.aria2" | head -1 | sed 's/.*out=//')
+  dir=$(grep 'dir=' "/tmp/model_one_${n}.aria2" | head -1 | sed 's/.*dir=//')
+  echo ""
+  echo "===== [$n] START $(date -Is) → $dir/$out ====="
+  df -h "$MODELS_ROOT" 2>/dev/null | tail -1 || df -h / | tail -1
+  aria2c -i "/tmp/model_one_${n}.aria2" \
+    -x "$ARIA2_X" -s "$ARIA2_X" -j 1 \
+    --file-allocation=none --continue=true --max-tries=0 --retry-wait=3 \
+    --timeout=120 --connect-timeout=30 --min-split-size=1M \
+    --summary-interval=15 --console-log-level=notice \
+    2>&1 | tee -a "$LOG"
+  rc=${PIPESTATUS[0]}
+  if [ "$rc" -ne 0 ]; then
+    echo "===== [$n] FAILED rc=$rc $out =====" | tee -a "$LOG"
+    echo "Stopping sequential download (disk or network). Fix and re-run; completed files are skipped."
+    exit "$rc"
+  fi
+  echo "===== [$n] DONE $out size=$(stat -c%s "$dir/$out" 2>/dev/null || echo '?') =====" | tee -a "$LOG"
+  du -sh "$MODELS_ROOT"/* 2>/dev/null | tee -a "$LOG"
+  n=$((n + 1))
+done
+
+echo "ALL_COMPLETE"
 du -sh "$MODELS_ROOT"/* 2>/dev/null
-echo LAUNCHED_OK
+df -h "$MODELS_ROOT" 2>/dev/null | tail -1 || true
