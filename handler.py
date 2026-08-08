@@ -4,10 +4,12 @@ import json
 import uuid
 import logging
 import urllib.request
+import urllib.error
 import urllib.parse
 import binascii
 import subprocess
 import time
+import shutil
 
 # Heavy deps optional for smoke/ping (no ComfyUI needed)
 try:
@@ -101,8 +103,14 @@ def queue_prompt(prompt):
     logger.info(f"Queueing prompt to: {url}")
     p = {"prompt": prompt, "client_id": client_id}
     data = json.dumps(p).encode('utf-8')
-    req = urllib.request.Request(url, data=data)
-    return json.loads(urllib.request.urlopen(req).read())
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        detail = e.read().decode("utf-8", errors="replace")
+        logger.error(f"ComfyUI /prompt failed {e.code}: {detail[:2000]}")
+        raise Exception(f"ComfyUI prompt rejected ({e.code}): {detail[:1000]}")
 
 
 def get_history(prompt_id):
@@ -127,14 +135,46 @@ def get_videos(ws, prompt):
             continue
 
     history = get_history(prompt_id)[prompt_id]
-    for node_id in history['outputs']:
-        node_output = history['outputs'][node_id]
+    status = history.get("status") or {}
+    if status.get("status_str") == "error" or status.get("completed") is False:
+        # Surface ComfyUI execution errors instead of a vague "video not found"
+        msgs = status.get("messages") or []
+        err_bits = []
+        for m in msgs:
+            if isinstance(m, list) and len(m) >= 2 and m[0] == "execution_error":
+                info = m[1] if isinstance(m[1], dict) else {}
+                err_bits.append(
+                    f"node={info.get('node_id')} {info.get('node_type')}: "
+                    f"{info.get('exception_message')}"
+                )
+        if err_bits:
+            raise Exception("ComfyUI execution failed: " + " | ".join(err_bits))
+    for node_id in history.get("outputs") or {}:
+        node_output = history["outputs"][node_id]
         videos_output = []
-        if 'gifs' in node_output:
-            for video in node_output['gifs']:
-                with open(video['fullpath'], 'rb') as f:
-                    video_data = base64.b64encode(f.read()).decode('utf-8')
-                videos_output.append(video_data)
+        # VHS / video helpers may use different keys
+        for key in ("gifs", "videos", "video"):
+            if key not in node_output:
+                continue
+            items = node_output[key]
+            if not isinstance(items, list):
+                items = [items]
+            for video in items:
+                path = None
+                if isinstance(video, dict):
+                    path = video.get("fullpath") or video.get("filename")
+                    if path and not os.path.isabs(path):
+                        # try Comfy output dir
+                        for base in ("/ComfyUI/output", "/workspace/ComfyUI/output"):
+                            cand = os.path.join(base, path)
+                            if os.path.isfile(cand):
+                                path = cand
+                                break
+                elif isinstance(video, str):
+                    path = video
+                if path and os.path.isfile(path):
+                    with open(path, "rb") as f:
+                        videos_output.append(base64.b64encode(f.read()).decode("utf-8"))
         output_videos[node_id] = videos_output
 
     return output_videos
@@ -216,6 +256,7 @@ def handler(job):
         return {"error": str(e)}
 
     # Image: path | url | base64
+    # LoadImage expects a file under ComfyUI/input (relative name), not an arbitrary absolute path.
     if "image_path" in job_input:
         image_path = process_input(job_input["image_path"], task_id, "input_image.jpg", "path")
     elif "image_url" in job_input:
@@ -225,6 +266,19 @@ def handler(job):
     else:
         image_path = "/example_image.png"
         logger.info("Using default image: /example_image.png")
+
+    comfy_input_dir = os.environ.get("COMFY_INPUT_DIR", "/ComfyUI/input")
+    os.makedirs(comfy_input_dir, exist_ok=True)
+    image_name = f"{task_id}_input.jpg"
+    image_dest = os.path.join(comfy_input_dir, image_name)
+    try:
+        import shutil
+        shutil.copy2(image_path, image_dest)
+        image_path = image_name  # relative path for LoadImage
+        logger.info(f"Image staged for ComfyUI: {image_dest}")
+    except Exception as e:
+        logger.error(f"Failed to stage image into ComfyUI input: {e}")
+        return {"error": f"Failed to stage image: {e}"}
 
     # Optional user LoRAs (max 4 pairs). Lightning stays on lora_0.
     lora_pairs = job_input.get("lora_pairs", []) or []
@@ -256,8 +310,18 @@ def handler(job):
 
     prompt["244"]["inputs"]["image"] = image_path
     prompt["541"]["inputs"]["num_frames"] = length
-    prompt["135"]["inputs"]["positive_prompt"] = prompt_text
-    prompt["135"]["inputs"]["negative_prompt"] = negative_prompt
+    # Scaled NSFW UMT5 is loaded via native CLIPLoader + CLIPTextEncode + WanVideoTextEmbedBridge
+    # (LoadWanVideoT5TextEncoder rejects fp8-scaled checkpoints).
+    if "137" in prompt and prompt["137"].get("class_type") == "CLIPTextEncode":
+        prompt["137"]["inputs"]["text"] = prompt_text
+        if "138" in prompt:
+            prompt["138"]["inputs"]["text"] = negative_prompt
+    elif "135" in prompt and "positive_prompt" in prompt["135"].get("inputs", {}):
+        # Legacy WanVideoTextEncode path
+        prompt["135"]["inputs"]["positive_prompt"] = prompt_text
+        prompt["135"]["inputs"]["negative_prompt"] = negative_prompt
+    else:
+        raise Exception("Workflow missing text encode nodes (expected CLIPTextEncode 137/138 or WanVideoTextEncode 135)")
     prompt["220"]["inputs"]["seed"] = seed
     prompt["540"]["inputs"]["seed"] = seed
     prompt["540"]["inputs"]["cfg"] = cfg

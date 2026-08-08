@@ -69,31 +69,55 @@
   },
   "135": {
     "inputs": {
-      "positive_prompt": "running man, grab the gun",
-      "negative_prompt": "bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards",
-      "force_offload": true,
-      "use_disk_cache": false,
-      "device": "gpu",
-      "t5": [
-        "136",
+      "positive": [
+        "137",
+        0
+      ],
+      "negative": [
+        "138",
         0
       ]
     },
-    "class_type": "WanVideoTextEncode",
+    "class_type": "WanVideoTextEmbedBridge",
     "_meta": {
-      "title": "WanVideo TextEncode"
+      "title": "WanVideo TextEmbed Bridge (native CLIP -> WAN embeds)"
     }
   },
   "136": {
     "inputs": {
-      "model_name": "nsfw_wan_umt5-xxl_fp8_scaled.safetensors",
-      "precision": "fp16",
-      "load_device": "offload_device",
-      "quantization": "fp8_e4m3fn"
+      "clip_name": "nsfw_wan_umt5-xxl_fp8_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
     },
-    "class_type": "LoadWanVideoT5TextEncoder",
+    "class_type": "CLIPLoader",
     "_meta": {
-      "title": "WanVideo T5 Text Encoder Loader (NSFW)"
+      "title": "CLIP Loader (NSFW UMT5 scaled fp8)"
+    }
+  },
+  "137": {
+    "inputs": {
+      "text": "running man, grab the gun",
+      "clip": [
+        "136",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive)"
+    }
+  },
+  "138": {
+    "inputs": {
+      "text": "bright tones, overexposed, static, blurred details, subtitles, style, works, paintings, images, static, overall gray, worst quality, low quality, JPEG compression residue, ugly, incomplete, extra fingers, poorly drawn hands, poorly drawn faces, deformed, disfigured, misshapen limbs, fused fingers, still picture, messy background, three legs, many people in the background, walking backwards",
+      "clip": [
+        "136",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative)"
     }
   },
   "171": {

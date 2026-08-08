@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.mp4
+*.err
+*.out
+*_job_log.txt
+last_runpod_job_id.txt
+pod_comfy_setup_out.txt
+smoke_server.err
+smoke_server.out
+.DS_Store
