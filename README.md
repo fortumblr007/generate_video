@@ -3,14 +3,21 @@
 Image-to-video worker using:
 
 - **FX-FeiHou Wan2.2 Remix NSFW I2V v3.0** (HIGH + LOW fp8)
-- **NSFW UMT5** text encoder (fp8 scaled)
+- **NSFW UMT5** text encoder (fp8 scaled) via native **CLIPLoader + WanVideoTextEmbedBridge**
 - **LightX2V Lightning** 4-step I2V LoRAs
+- **SageAttention** (`attention_mode: sageattn`)
 - **ComfyUI + Kijai WanVideoWrapper**
 - RunPod Serverless handler
 
 **I2V only** — first/last-frame (FLF2V) is not supported.
 
 Fork of [wlsdml1114/generate_video](https://github.com/wlsdml1114/generate_video) with model and recipe updates for Remix NSFW + Lightning.
+
+### Working notes (pod bring-up + quality)
+
+- **[NOTES.md](NOTES.md)** — full pod layout, T5/Sage constraints, handler/workflow changes, run log, open issues
+- **[docs/QUALITY_BACKLOG.md](docs/QUALITY_BACKLOG.md)** — quality is currently bad; experiment checklist
+- **Lightning defaults** below (cfg 1 / steps 4) are the intended recipe; UI jobs with **cfg 7 / steps 8** looked poor and need a fix pass
 
 ---
 
