@@ -20,8 +20,8 @@ image, override the build arguments:
 ```powershell
 docker build --progress=plain `
   --build-arg BASE_IMAGE=<base-image:tag> `
-  --build-arg WAN_HIGH_NOISE_MODEL_URL=<high-noise-model-url> `
-  --build-arg WAN_LOW_NOISE_MODEL_URL=<low-noise-model-url> `
+  --build-arg WAN_HIGH_NOISE_MODEL_URI=<high-noise-hf-uri> `
+  --build-arg WAN_LOW_NOISE_MODEL_URI=<low-noise-hf-uri> `
   --build-arg WAN_HIGH_NOISE_MODEL_SHA256=<high-noise-sha256> `
   --build-arg WAN_LOW_NOISE_MODEL_SHA256=<low-noise-sha256> `
   --build-arg MODEL_REFRESH=<unique-build-value> `
@@ -30,13 +30,14 @@ docker build --progress=plain `
 docker push <registry>/generate-video-ksampler:<new-tag>
 ```
 
-The downloaded files are deliberately stored under the canonical filenames
-already referenced by every workflow. This means changing the two URLs does
+The two diffusion models are downloaded with the Hugging Face CLI from
+`hf://` URIs. They are deliberately stored under the canonical filenames
+already referenced by every workflow. This means changing the two URIs does
 not require editing six workflow files. The replacement files must remain
 compatible with the workflows' Wan 2.2 I2V high-noise and low-noise stages.
 The SHA-256 arguments make the build fail instead of silently baking an
 unexpected or incomplete model. Change `MODEL_REFRESH` for a deliberate fresh
-download when rebuilding the same commit and URLs.
+download when rebuilding the same commit and URIs.
 
 Replace `<registry>` with the Docker Hub or private-registry namespace used by
 the RunPod endpoint, then update the endpoint to the new immutable tag.

@@ -97,10 +97,12 @@ class BakeConfigurationTests(unittest.TestCase):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("ARG BASE_IMAGE=", dockerfile)
         self.assertIn("FROM ${BASE_IMAGE} AS runtime", dockerfile)
-        self.assertIn("ARG WAN_HIGH_NOISE_MODEL_URL=", dockerfile)
-        self.assertIn("ARG WAN_LOW_NOISE_MODEL_URL=", dockerfile)
-        self.assertIn('wget -q "${WAN_HIGH_NOISE_MODEL_URL}"', dockerfile)
-        self.assertIn('wget -q "${WAN_LOW_NOISE_MODEL_URL}"', dockerfile)
+        self.assertIn("ARG WAN_HIGH_NOISE_MODEL_URI=hf://", dockerfile)
+        self.assertIn("ARG WAN_LOW_NOISE_MODEL_URI=hf://", dockerfile)
+        self.assertIn('hf download "${WAN_HIGH_NOISE_MODEL_URI}"', dockerfile)
+        self.assertIn('hf download "${WAN_LOW_NOISE_MODEL_URI}"', dockerfile)
+        self.assertIn("--local-dir /tmp/wan-high --force-download", dockerfile)
+        self.assertIn("--local-dir /tmp/wan-low --force-download", dockerfile)
 
     def test_baked_models_are_refreshed_and_checksum_verified(self):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
