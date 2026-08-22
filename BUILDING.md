@@ -4,6 +4,11 @@ The Dockerfile bakes ComfyUI, its custom nodes, both Wan 2.2 diffusion models,
 the text encoder, VAE, LoRAs, and RIFE checkpoint into one serverless image.
 Plan for a large build and registry upload.
 
+The image installs `huggingface_hub` near the start of the build, which
+provides the `hf` CLI used by all baked Hugging Face artifact downloads. The
+same Docker layer runs `hf --help` so the build fails early if the CLI was not
+installed correctly.
+
 ## Build locally
 
 Start Docker Desktop, then run from this repository directory. The default
@@ -30,9 +35,9 @@ docker build --progress=plain `
 docker push <registry>/generate-video-ksampler:<new-tag>
 ```
 
-The two diffusion models are downloaded with the Hugging Face CLI from
-`hf://` URIs. They are deliberately stored under the canonical filenames
-already referenced by every workflow. This means changing the two URIs does
+All baked Hugging Face artifacts are downloaded with the Hugging Face CLI
+from `hf://` URIs. The two diffusion models are deliberately stored under the
+canonical filenames already referenced by every workflow. This means changing the two URIs does
 not require editing six workflow files. The replacement files must remain
 compatible with the workflows' Wan 2.2 I2V high-noise and low-noise stages.
 The SHA-256 arguments make the build fail instead of silently baking an
