@@ -11,6 +11,7 @@ from workflow_options import (
     DEFAULT_LOW_LORA_STRENGTH,
     MAX_SEED,
     SAMPLING_NODES,
+    bypass_torch_compile,
     configure_lightx2v_strengths,
     configure_sampling,
     get_cfg,
@@ -200,5 +201,79 @@ class LightX2VStrengthTests(unittest.TestCase):
                 configure_lightx2v_strengths(copy.deepcopy(prompt), 0.4, 1.0)
 
 
+class BypassTorchCompileTests(unittest.TestCase):
+    def _consumer_links(self, prompt, node_id):
+        links = []
+        for other_id, node in prompt.items():
+            if other_id == node_id or not isinstance(node, dict):
+                continue
+            if node.get("class_type") == "TorchCompileModelWanVideoV2":
+                continue
+            for key, value in (node.get("inputs") or {}).items():
+                if (
+                    isinstance(value, list)
+                    and value
+                    and str(value[0]) == str(node_id)
+                ):
+                    links.append((other_id, key, value))
+        return links
+
+    def test_rewires_sage_to_compile_upstream_on_nolora(self):
+        workflow_path = WORKFLOW_DIR / "wan22_nolora.json"
+        with workflow_path.open(encoding="utf-8") as workflow_file:
+            prompt = json.load(workflow_file)
+
+        high_src = list(prompt["391"]["inputs"]["model"])
+        low_src = list(prompt["390"]["inputs"]["model"])
+        self.assertEqual(["283", 0], high_src)
+        self.assertEqual(["284", 0], low_src)
+
+        bypassed = bypass_torch_compile(prompt)
+
+        self.assertEqual(2, bypassed)
+        self.assertEqual(high_src, prompt["392"]["inputs"]["model"])
+        self.assertEqual(low_src, prompt["393"]["inputs"]["model"])
+        self.assertEqual([], self._consumer_links(prompt, "390"))
+        self.assertEqual([], self._consumer_links(prompt, "391"))
+
+    def test_follows_last_lora_on_1lora_workflow(self):
+        workflow_path = WORKFLOW_DIR / "wan22_1lora.json"
+        with workflow_path.open(encoding="utf-8") as workflow_file:
+            prompt = json.load(workflow_file)
+
+        high_src = list(prompt["391"]["inputs"]["model"])
+        low_src = list(prompt["390"]["inputs"]["model"])
+        self.assertEqual(["282", 0], high_src)
+        self.assertEqual(["336", 0], low_src)
+
+        bypass_torch_compile(prompt)
+
+        self.assertEqual(high_src, prompt["392"]["inputs"]["model"])
+        self.assertEqual(low_src, prompt["393"]["inputs"]["model"])
+
+    def test_all_baked_workflows_bypass_compile_consumers(self):
+        workflow_paths = sorted(WORKFLOW_DIR.glob("*.json"))
+        self.assertEqual(6, len(workflow_paths))
+
+        for workflow_path in workflow_paths:
+            with self.subTest(workflow=workflow_path.name):
+                with workflow_path.open(encoding="utf-8") as workflow_file:
+                    prompt = json.load(workflow_file)
+                compile_ids = [
+                    node_id
+                    for node_id, node in prompt.items()
+                    if node.get("class_type") == "TorchCompileModelWanVideoV2"
+                ]
+                self.assertEqual(2, len(compile_ids))
+                bypass_torch_compile(prompt)
+                for compile_id in compile_ids:
+                    self.assertEqual([], self._consumer_links(prompt, compile_id))
+
+    def test_missing_compile_node_fails_loudly(self):
+        with self.assertRaisesRegex(ValueError, "TorchCompileModelWanVideoV2"):
+            bypass_torch_compile({})
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -140,3 +140,39 @@ def configure_lightx2v_strengths(prompt, high_lora_strength, low_lora_strength):
             raise ValueError(f"workflow is missing LightX2V LoraLoaderModelOnly node {node_id}")
         node.setdefault("inputs", {})["strength_model"] = values[node_id]
 
+
+def _is_link_to(value, node_id):
+    return (
+        isinstance(value, list)
+        and len(value) >= 1
+        and str(value[0]) == str(node_id)
+    )
+
+
+def bypass_torch_compile(prompt):
+    """Point compile consumers at the compile node's model input so inductor never runs."""
+    compile_nodes = {
+        node_id: node
+        for node_id, node in prompt.items()
+        if isinstance(node, dict)
+        and node.get("class_type") == "TorchCompileModelWanVideoV2"
+    }
+    if not compile_nodes:
+        raise ValueError("workflow does not contain a TorchCompileModelWanVideoV2 node")
+
+    for compile_id, compile_node in compile_nodes.items():
+        upstream = (compile_node.get("inputs") or {}).get("model")
+        if not isinstance(upstream, list) or not upstream:
+            raise ValueError(f"TorchCompile node {compile_id} has no model input")
+        replacement = [upstream[0], upstream[1] if len(upstream) > 1 else 0]
+        for node_id, node in prompt.items():
+            if node_id in compile_nodes or not isinstance(node, dict):
+                continue
+            inputs = node.setdefault("inputs", {})
+            for key, value in list(inputs.items()):
+                if _is_link_to(value, compile_id):
+                    inputs[key] = list(replacement)
+
+    return len(compile_nodes)
+
+
