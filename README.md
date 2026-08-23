@@ -1,10 +1,6 @@
-# Important!
-# Use generate_video_v1.0.6, ksampler version is still unstable!
-# Important!
-
 # Wan2.2 Generate Video API Client
 
-This project provides a Python client for generating videos from images using **Wan2.2** model through RunPod's generate_video endpoint. The client supports base64 encoding, LoRA configurations, and batch processing capabilities.
+This project provides a Python client for generating videos from images using **Wan2.2** through a RunPod Serverless endpoint. The worker uses ComfyUI's native dual-pass ksampler (high-noise then low-noise), baked LightX2V 4-step LoRAs, and optional user LoRA pairs.
 
 [![Runpod](https://api.runpod.io/badge/fortumblr007/generate_video)](https://console.runpod.io/hub/listing/fortumblr007/generate_video)
 
@@ -21,7 +17,7 @@ This Wan2.2 client is primarily designed for **Engui Studio**, a comprehensive A
 *   **Wan2.2 Model**: Powered by the advanced Wan2.2 AI model for high-quality video generation.
 *   **Image-to-Video Generation**: Converts static images into dynamic videos with natural motion.
 *   **Base64 Encoding Support**: Handles image encoding/decoding automatically.
-*   **LoRA Configuration**: Supports up to 4 LoRA pairs for enhanced video generation.
+*   **LoRA Configuration**: Baked LightX2V lightning LoRAs plus up to 4 extra high/low user LoRA pairs.
 *   **Batch Processing**: Process multiple images in a single operation.
 *   **Error Handling**: Comprehensive error handling and logging.
 *   **Async Job Management**: Automatic job submission and status monitoring.
@@ -34,7 +30,8 @@ This template includes all the necessary components to run **Wan2.2** as a RunPo
 *   **Dockerfile**: Configures the environment and installs all dependencies required for Wan2.2 model execution.
 *   **handler.py**: Implements the handler function that processes requests for RunPod Serverless.
 *   **entrypoint.sh**: Performs initialization tasks when the worker starts.
-*   **new_Wan22_api.json**: Single workflow file supporting up to 4 LoRA pairs for Wan2.2 image-to-video generation.
+*   **workflow/wan22_*.json**: Dual-pass Wan 2.2 I2V graphs (no-LoRA through 4 LoRA pairs, plus FLF2V).
+*   Requires a **32GB+** GPU (5090 / 5000 Ada / A6000 / A40 / L40 class). 24GB cards (4090) will OOM when both 14B experts load.
 
 ## 📖 Python Client Usage
 
@@ -132,6 +129,7 @@ The `input` object must contain the following fields. Images can be input using 
 #### Image Input (use only one)
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
+| `image` | `string` | No | - | Auto-detected path, URL, or Base64 image |
 | `image_path` | `string` | No | - | Local path to the input image |
 | `image_url` | `string` | No | - | URL of the input image |
 | `image_base64` | `string` | No | - | Base64 encoded string of the input image |
@@ -164,7 +162,6 @@ The `input` object must contain the following fields. Images can be input using 
 | `height` | `integer` | No | `832` | Height of the output video in pixels |
 | `length` | `integer` | No | `81` | Length of the generated video |
 | `steps` | `integer` | No | `4` | Total denoising steps, always split in half across high/low noise |
-| `context_overlap` | `integer` | No | `48` | Context overlap value |
 | `keep_models_loaded` | `boolean` | No | `false` | When `true`, skip the workflow's forced end-of-job model unload so a warm worker can reuse models when VRAM permits |
 
 `seed` of `-1` (or omitting `seed`) makes the handler draw a random seed and write it into the high-noise `RandomNoise` node. The low-noise sampler does not take a seed.
@@ -263,8 +260,7 @@ The `input` object must contain the following fields. Images can be input using 
     "high_lora_strength": 0.4,
     "low_lora_strength": 1.0,
     "width": 480,
-    "height": 832,
-    "context_overlap": 48
+    "height": 832
   }
 }
 ```
@@ -328,7 +324,7 @@ Instead of directly transmitting Base64 encoded files, you can use RunPod's Netw
 #### `__init__(runpod_endpoint_id, runpod_api_key)`
 Initialize the client with RunPod endpoint ID and API key.
 
-#### `create_video_from_image(image_path, prompt, width, height, length, steps, seed, cfg, context_overlap, lora_pairs, negative_prompt, keep_models_loaded)`
+#### `create_video_from_image(...)`
 Generate video from a single image.
 
 **Parameters:**
@@ -343,7 +339,6 @@ Generate video from a single image.
 - `cfg` (float): High-noise CFG scale (default: 1.0)
 - `high_lora_strength` (float): Baked high-noise LightX2V LoRA strength (default: 0.4)
 - `low_lora_strength` (float): Baked low-noise LightX2V LoRA strength (default: 1.0)
-- `context_overlap` (int): Context overlap (default: 48)
 - `lora_pairs` (list): LoRA configuration pairs (default: None)
 - `keep_models_loaded` (bool): Skip forced end-of-job model unloading (default: False)
 
@@ -365,16 +360,12 @@ Save video result to file.
 
 ## 🔧 Wan2.2 Workflow Configuration
 
-This template uses a single workflow configuration for **Wan2.2**:
+This worker uses native ComfyUI ksampler graphs under `workflow/`:
 
-*   **new_Wan22_api.json**: Wan2.2 image-to-video generation workflow (supports up to 4 LoRA pairs)
+*   **wan22_nolora.json** through **wan22_4lora.json**: single-image I2V, selected by user LoRA count
+*   **wan22_flf2v.json**: first-and-last-frame I2V when `end_image*` is set
 
-The workflow is based on ComfyUI and includes all necessary nodes for Wan2.2 processing:
-- CLIP text encoding for prompts
-- VAE loading and processing
-- WanImageToVideo node for video generation
-- LoRA loading and application nodes (WanVideoLoraSelectMulti)
-- Image concatenation and processing nodes
+Each graph runs a high-noise expert then a low-noise expert (steps split in half), baked LightX2V LoRAs, Sage Attention, and RIFE frame interpolation. Torch compile is disabled at runtime.
 
 ## 🙏 About Wan2.2
 
@@ -393,7 +384,7 @@ This project is based on the following original repository. All rights to the mo
 
 *   **Wan2.2:** [https://github.com/Wan-Video/Wan2.2](https://github.com/Wan-Video/Wan2.2)
 *   **ComfyUI:** [https://github.com/comfyanonymous/ComfyUI](https://github.com/comfyanonymous/ComfyUI)
-*   **ComfyUI-WanVideoWrapper** [https://github.com/kijai/ComfyUI-WanVideoWrapper](https://github.com/kijai/ComfyUI-WanVideoWrapper)
+*   **ComfyUI-KJNodes:** [https://github.com/kijai/ComfyUI-KJNodes](https://github.com/kijai/ComfyUI-KJNodes)
 
 ## 📄 License
 
