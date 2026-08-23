@@ -3,7 +3,6 @@
 # Important!
 
 # Wan2.2 Generate Video API Client
-[한국어 README 보기](README_kr.md)
 
 This project provides a Python client for generating videos from images using **Wan2.2** model through RunPod's generate_video endpoint. The client supports base64 encoding, LoRA configurations, and batch processing capabilities.
 
@@ -58,9 +57,11 @@ result = client.create_video_from_image(
     width=480,
     height=832,
     length=81,
-    steps=10,
-    seed=42,
-    cfg=2.0
+    steps=4,
+    seed=-1,
+    cfg=1.0,
+    high_lora_strength=0.4,
+    low_lora_strength=1.0
 )
 
 # Save result if successful
@@ -91,9 +92,11 @@ result = client.create_video_from_image(
     width=480,
     height=832,
     length=81,
-    steps=10,
-    seed=42,
-    cfg=2.0,
+    steps=4,
+    seed=-1,
+    cfg=1.0,
+    high_lora_strength=0.4,
+    low_lora_strength=1.0,
     lora_pairs=lora_pairs
 )
 ```
@@ -110,9 +113,11 @@ batch_result = client.batch_process_images(
     width=480,
     height=832,
     length=81,
-    steps=10,
-    seed=42,
-    cfg=2.0
+    steps=4,
+    seed=-1,
+    cfg=1.0,
+    high_lora_strength=0.4,
+    low_lora_strength=1.0
 )
 
 print(f"Batch processing completed: {batch_result['successful']}/{batch_result['total_files']} successful")
@@ -151,14 +156,20 @@ The `input` object must contain the following fields. Images can be input using 
 | --- | --- | --- | --- | --- |
 | `prompt` | `string` | Yes | - | Description text for the video to be generated |
 | `negative_prompt` | `string` | No | - | Negative prompt to exclude unwanted elements from the video |
-| `seed` | `integer` | No | `42` | Random seed for video generation |
-| `cfg` | `float` | No | `2.0` | CFG scale for generation |
+| `seed` | `integer` | No | `-1` | RandomNoise seed. `-1` (default) makes the handler pick a random seed |
+| `cfg` | `float` | No | `1.0` | CFG scale for the high-noise pass |
+| `high_lora_strength` | `float` | No | `0.4` | Strength of the baked high-noise LightX2V 4-step LoRA (not `lora_pairs`) |
+| `low_lora_strength` | `float` | No | `1.0` | Strength of the baked low-noise LightX2V 4-step LoRA (not `lora_pairs`) |
 | `width` | `integer` | No | `480` | Width of the output video in pixels |
 | `height` | `integer` | No | `832` | Height of the output video in pixels |
 | `length` | `integer` | No | `81` | Length of the generated video |
-| `steps` | `integer` | No | `10` | Number of denoising steps |
+| `steps` | `integer` | No | `4` | Total denoising steps, always split in half across high/low noise |
 | `context_overlap` | `integer` | No | `48` | Context overlap value |
 | `keep_models_loaded` | `boolean` | No | `false` | When `true`, skip the workflow's forced end-of-job model unload so a warm worker can reuse models when VRAM permits |
+
+`seed` of `-1` (or omitting `seed`) makes the handler draw a random seed and write it into the high-noise `RandomNoise` node. The low-noise sampler does not take a seed.
+
+`high_lora_strength` and `low_lora_strength` control the baked LightX2V lightning LoRAs on the high-noise and low-noise experts. They are separate from `lora_pairs`. When either value is greater than `0`, set `cfg` to `1.0`. LightX2V is a 4-step distill; CFG above 1 fights that distill (slower, more artifacts). The worker does not enforce this.
 
 `keep_models_loaded` must be a JSON boolean, not a string. ComfyUI may still selectively evict models when it needs VRAM; this option only disables the unconditional unload at the end of every job.
 
@@ -171,12 +182,14 @@ The `input` object must contain the following fields. Images can be input using 
     "prompt": "running man, grab the gun",
     "negative_prompt": "blurry, low quality, distorted",
     "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...",
-    "seed": 42,
-    "cfg": 2.0,
+    "seed": -1,
+    "cfg": 1.0,
+    "high_lora_strength": 0.4,
+    "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
     "length": 81,
-    "steps": 10,
+    "steps": 4,
     "keep_models_loaded": true
   }
 }
@@ -189,8 +202,10 @@ The `input` object must contain the following fields. Images can be input using 
     "prompt": "running man, grab the gun",
     "negative_prompt": "blurry, low quality, distorted",
     "image_base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD...",
-    "seed": 42,
-    "cfg": 2.0,
+    "seed": -1,
+    "cfg": 1.0,
+    "high_lora_strength": 0.4,
+    "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
     "lora_pairs": [
@@ -212,8 +227,10 @@ The `input` object must contain the following fields. Images can be input using 
     "prompt": "running man, grab the gun",
     "negative_prompt": "blurry, low quality, distorted",
     "image_path": "/my_volume/image.jpg",
-    "seed": 42,
-    "cfg": 2.0,
+    "seed": -1,
+    "cfg": 1.0,
+    "high_lora_strength": 0.4,
+    "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
     "lora_pairs": [
@@ -241,8 +258,10 @@ The `input` object must contain the following fields. Images can be input using 
     "prompt": "running man, grab the gun",
     "negative_prompt": "blurry, low quality, distorted",
     "image_url": "https://example.com/image.jpg",
-    "seed": 42,
-    "cfg": 2.0,
+    "seed": -1,
+    "cfg": 1.0,
+    "high_lora_strength": 0.4,
+    "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
     "context_overlap": 48
@@ -319,9 +338,11 @@ Generate video from a single image.
 - `width` (int): Output video width (default: 480)
 - `height` (int): Output video height (default: 832)
 - `length` (int): Number of frames (default: 81)
-- `steps` (int): Denoising steps (default: 10)
-- `seed` (int): Random seed (default: 42)
-- `cfg` (float): CFG scale (default: 2.0)
+- `steps` (int): Total denoising steps, split in half (default: 4)
+- `seed` (int): RandomNoise seed. `-1` randomizes (default: -1)
+- `cfg` (float): High-noise CFG scale (default: 1.0)
+- `high_lora_strength` (float): Baked high-noise LightX2V LoRA strength (default: 0.4)
+- `low_lora_strength` (float): Baked low-noise LightX2V LoRA strength (default: 1.0)
 - `context_overlap` (int): Context overlap (default: 48)
 - `lora_pairs` (list): LoRA configuration pairs (default: None)
 - `keep_models_loaded` (bool): Skip forced end-of-job model unloading (default: False)

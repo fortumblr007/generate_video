@@ -275,6 +275,11 @@ class GenerateVideoClient:
         width: int = 720,
         height: int = 1280,
         length: int = 81,
+        seed: int = -1,
+        steps: int = 4,
+        cfg: float = 1.0,
+        high_lora_strength: float = 0.4,
+        low_lora_strength: float = 1.0,
         lora_pairs: Optional[List[Dict[str, Any]]] = None,
         keep_models_loaded: bool = False
     ) -> Dict[str, Any]:
@@ -295,6 +300,11 @@ class GenerateVideoClient:
             width: Output width (will be adjusted to nearest multiple of 16)
             height: Output height (will be adjusted to nearest multiple of 16)
             length: Number of frames
+            seed: RandomNoise seed. -1 (default) randomizes on the worker
+            steps: Total denoising steps, split in half across high/low noise
+            cfg: CFG scale for the high-noise ScheduledCFGGuidance node
+            high_lora_strength: Strength of the baked high-noise LightX2V LoRA
+            low_lora_strength: Strength of the baked low-noise LightX2V LoRA
             lora_pairs: LoRA settings list (unlimited, each item: {"high": "lora_name.safetensors", "low": "lora_name.safetensors", "high_weight": 1.0, "low_weight": 1.0})
             keep_models_loaded: Keep models in VRAM between warm-worker jobs when possible
         
@@ -361,6 +371,11 @@ class GenerateVideoClient:
             "width": width,
             "height": height,
             "length": length,
+            "seed": seed,
+            "steps": steps,
+            "cfg": cfg,
+            "high_lora_strength": high_lora_strength,
+            "low_lora_strength": low_lora_strength,
             "lora_pairs": lora_pairs,
             "keep_models_loaded": keep_models_loaded
         }
@@ -391,6 +406,11 @@ class GenerateVideoClient:
         width: int = 720,
         height: int = 1280,
         length: int = 81,
+        seed: int = -1,
+        steps: int = 4,
+        cfg: float = 1.0,
+        high_lora_strength: float = 0.4,
+        low_lora_strength: float = 1.0,
         lora_pairs: Optional[List[Dict[str, Any]]] = None,
         end_image: Optional[Union[str, bytes]] = None,
         keep_models_loaded: bool = False
@@ -407,6 +427,11 @@ class GenerateVideoClient:
             width: Output width (will be adjusted to nearest multiple of 16)
             height: Output height (will be adjusted to nearest multiple of 16)
             length: Number of frames
+            seed: RandomNoise seed. -1 (default) randomizes on the worker
+            steps: Total denoising steps, split in half across high/low noise
+            cfg: CFG scale for the high-noise ScheduledCFGGuidance node
+            high_lora_strength: Strength of the baked high-noise LightX2V LoRA
+            low_lora_strength: Strength of the baked low-noise LightX2V LoRA
             lora_pairs: LoRA settings list (unlimited)
             end_image: End image for FLF2V workflow (optional)
             keep_models_loaded: Keep models in VRAM between warm-worker jobs when possible
@@ -454,6 +479,11 @@ class GenerateVideoClient:
                 width=width,
                 height=height,
                 length=length,
+                seed=seed,
+                steps=steps,
+                cfg=cfg,
+                high_lora_strength=high_lora_strength,
+                low_lora_strength=low_lora_strength,
                 lora_pairs=lora_pairs,
                 keep_models_loaded=keep_models_loaded
             )

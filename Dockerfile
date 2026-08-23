@@ -30,7 +30,9 @@ RUN cd /ComfyUI/custom_nodes && \
     pip install -r requirements.txt
 
 RUN cd /ComfyUI/custom_nodes && \
-    git clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git
+    git clone https://github.com/Fannovel16/ComfyUI-Frame-Interpolation.git && \
+    cd ComfyUI-Frame-Interpolation && \
+    git checkout 26545cc2dd95bc3d27f056016300673bdeee78f5
 
 RUN cd /ComfyUI/custom_nodes/ComfyUI-Frame-Interpolation && \
     python install.py
@@ -70,6 +72,7 @@ RUN mkdir -p /ComfyUI/custom_nodes/ComfyUI-Frame-Interpolation/ckpts/rife && \
 
 
 COPY . .
+RUN mkdir -p /ComfyUI/input && cp /example_image.png /ComfyUI/input/example_image.png
 RUN mkdir -p /ComfyUI/user/default/ComfyUI-Manager
 COPY config.ini /ComfyUI/user/default/ComfyUI-Manager/config.ini
 COPY extra_model_paths.yaml /ComfyUI/extra_model_paths.yaml
