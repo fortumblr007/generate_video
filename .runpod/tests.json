@@ -15,22 +15,9 @@
   ],
   "config": {
     "gpuTypeId": "NVIDIA GeForce RTX 5090",
-    "gpuTypeIds": [
-      "NVIDIA GeForce RTX 5090",
-      "NVIDIA RTX 5000 Ada Generation",
-      "NVIDIA RTX PRO 4500 Blackwell",
-      "NVIDIA RTX A6000",
-      "NVIDIA A40",
-      "NVIDIA L40",
-      "NVIDIA L40S",
-      "NVIDIA RTX 6000 Ada Generation"
-    ],
-    "gpuIds": "ADA_32_PRO,ADA_48_PRO,AMPERE_48",
     "gpuCount": 1,
     "allowedCudaVersions": [
-      "12.8",
-      "12.7",
-      "12.6"
+      "12.8"
     ]
   }
 }
