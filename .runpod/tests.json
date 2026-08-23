@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "wan22_image_to_video_smoke_test",
+      "input": {
+        "prompt": "A cinematic portrait with subtle, natural movement and stable facial details",
+        "negative_prompt": "blurry, distorted, low quality, artifacts, subtitles",
+        "width": 480,
+        "height": 720,
+        "length": 17,
+        "keep_models_loaded": false
+      },
+      "timeout": 1800000
+    }
+  ],
+  "config": {
+    "gpuTypeId": "NVIDIA GeForce RTX 4090",
+    "gpuCount": 1,
+    "allowedCudaVersions": [
+      "12.8"
+    ]
+  }
+}
