@@ -1,14 +1,14 @@
 {
-    "title": "Wan2.2 Remix NSFW I2V Lightning",
-    "description": "Image-to-video with Remix NSFW I2V v3.0, NSFW UMT5, and LightX2V Lightning 4-step LoRAs. I2V only (no FLF2V).",
+    "title": "Wan2.2 with LoRA",
+    "description": "Advanced AI model for generating high-quality videos from images with natural motion and realistic animations. you can use at most 3 LoRA pairs",
     "type": "serverless",
     "category": "video",
     "iconUrl": "https://github.com/wlsdml1114/Engui_Studio/blob/main/assets/logo.png?raw=true",
-
+  
     "config": {
       "runsOn": "GPU",
       "containerDiskInGb": 180,
-
+  
       "gpuCount": 1,
       "gpuIds": "ADA_24,ADA_32_PRO",
       "allowedCudaVersions": [
