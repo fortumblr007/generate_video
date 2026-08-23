@@ -13,6 +13,7 @@ DEFAULT_STEPS = 4
 DEFAULT_CFG = 1.0
 DEFAULT_HIGH_LORA_STRENGTH = 0.4
 DEFAULT_LOW_LORA_STRENGTH = 1.0
+DEFAULT_SAGE_ATTENTION = "auto"
 MAX_SEED = 2**32 - 1
 
 LIGHTX2V_NODES = (
@@ -147,6 +148,24 @@ def _is_link_to(value, node_id):
         and len(value) >= 1
         and str(value[0]) == str(node_id)
     )
+
+
+def configure_sage_attention(prompt, mode=DEFAULT_SAGE_ATTENTION):
+    """Set PathchSageAttentionKJ to a GPU-safe mode. auto picks Ampere vs Ada kernels."""
+    if not isinstance(mode, str) or not mode:
+        raise ValueError("sage_attention mode must be a non-empty string")
+
+    configured_nodes = 0
+    for node in prompt.values():
+        if not isinstance(node, dict) or node.get("class_type") != "PathchSageAttentionKJ":
+            continue
+        node.setdefault("inputs", {})["sage_attention"] = mode
+        configured_nodes += 1
+
+    if configured_nodes == 0:
+        raise ValueError("workflow does not contain a PathchSageAttentionKJ node")
+
+    return configured_nodes
 
 
 def bypass_torch_compile(prompt):

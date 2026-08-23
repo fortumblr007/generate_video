@@ -9,10 +9,12 @@ from generate_video_client import GenerateVideoClient
 from workflow_options import (
     DEFAULT_HIGH_LORA_STRENGTH,
     DEFAULT_LOW_LORA_STRENGTH,
+    DEFAULT_SAGE_ATTENTION,
     MAX_SEED,
     SAMPLING_NODES,
     bypass_torch_compile,
     configure_lightx2v_strengths,
+    configure_sage_attention,
     configure_sampling,
     get_cfg,
     get_lora_strength,
@@ -272,6 +274,38 @@ class BypassTorchCompileTests(unittest.TestCase):
     def test_missing_compile_node_fails_loudly(self):
         with self.assertRaisesRegex(ValueError, "TorchCompileModelWanVideoV2"):
             bypass_torch_compile({})
+
+
+class ConfigureSageAttentionTests(unittest.TestCase):
+    def test_sets_auto_on_all_baked_workflows(self):
+        workflow_paths = sorted(WORKFLOW_DIR.glob("*.json"))
+        self.assertEqual(6, len(workflow_paths))
+
+        for workflow_path in workflow_paths:
+            with self.subTest(workflow=workflow_path.name):
+                with workflow_path.open(encoding="utf-8") as workflow_file:
+                    prompt = json.load(workflow_file)
+                sage_nodes = [
+                    node
+                    for node in prompt.values()
+                    if node.get("class_type") == "PathchSageAttentionKJ"
+                ]
+                self.assertEqual(2, len(sage_nodes))
+                for node in sage_nodes:
+                    self.assertEqual("auto", node["inputs"]["sage_attention"])
+
+                configured = configure_sage_attention(prompt, DEFAULT_SAGE_ATTENTION)
+                self.assertEqual(2, configured)
+                for node in sage_nodes:
+                    self.assertEqual("auto", node["inputs"]["sage_attention"])
+
+                configure_sage_attention(prompt, "disabled")
+                for node in sage_nodes:
+                    self.assertEqual("disabled", node["inputs"]["sage_attention"])
+
+    def test_missing_sage_node_fails_loudly(self):
+        with self.assertRaisesRegex(ValueError, "PathchSageAttentionKJ"):
+            configure_sage_attention({})
 
 
 if __name__ == "__main__":

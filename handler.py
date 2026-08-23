@@ -15,8 +15,10 @@ import shutil
 from workflow_options import (
     DEFAULT_HIGH_LORA_STRENGTH,
     DEFAULT_LOW_LORA_STRENGTH,
+    DEFAULT_SAGE_ATTENTION,
     bypass_torch_compile,
     configure_lightx2v_strengths,
+    configure_sage_attention,
     configure_model_retention,
     configure_sampling,
     ensure_rife_required_inputs,
@@ -405,6 +407,7 @@ def handler(job):
     configured_nodes = configure_model_retention(prompt, keep_models_loaded)
     rife_nodes = ensure_rife_required_inputs(prompt)
     compile_nodes = bypass_torch_compile(prompt)
+    sage_nodes = configure_sage_attention(prompt, DEFAULT_SAGE_ATTENTION)
     seed = resolve_seed(job_input.get("seed", -1))
     steps = get_steps(job_input)
     cfg = get_cfg(job_input)
@@ -425,6 +428,7 @@ def handler(job):
     )
     logger.info("RIFE required inputs configured: nodes=%s", rife_nodes)
     logger.info("Torch compile bypassed: nodes=%s", compile_nodes)
+    logger.info("Sage attention configured: mode=%s nodes=%s", DEFAULT_SAGE_ATTENTION, sage_nodes)
     logger.info(
         "Sampling configured: seed=%s steps=%s split=%s cfg=%s",
         seed,
