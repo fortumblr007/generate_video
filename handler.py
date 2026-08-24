@@ -155,31 +155,72 @@ def get_history(prompt_id):
     with urllib.request.urlopen(url) as response:
         return json.loads(response.read())
 
+def _comfy_execution_error_message(payload):
+    if not isinstance(payload, dict):
+        return None
+    parts = [
+        payload.get("exception_type"),
+        payload.get("node_type") or payload.get("node_id"),
+        payload.get("exception_message"),
+    ]
+    text = ": ".join(str(part) for part in parts if part)
+    return text or None
+
+
 def get_videos(ws, prompt):
     prompt_id = queue_prompt(prompt)['prompt_id']
+    logger.info("Comfy prompt queued: prompt_id=%s", prompt_id)
     output_videos = {}
+    execution_error = None
     while True:
         out = ws.recv()
-        if isinstance(out, str):
-            message = json.loads(out)
-            if message['type'] == 'executing':
-                data = message['data']
-                if data['node'] is None and data['prompt_id'] == prompt_id:
-                    break
-        else:
+        if not isinstance(out, str):
             continue
+        message = json.loads(out)
+        msg_type = message.get("type")
+        data = message.get("data") or {}
+        if data.get("prompt_id") not in (None, prompt_id):
+            continue
+        if msg_type == "execution_error":
+            execution_error = _comfy_execution_error_message(data) or "ComfyUI execution_error"
+            logger.error("Comfy execution_error: %s", execution_error)
+            break
+        if msg_type == "executing" and data.get("node") is None:
+            logger.info("Comfy prompt finished executing: prompt_id=%s", prompt_id)
+            break
 
-    history = get_history(prompt_id)[prompt_id]
-    for node_id in history['outputs']:
-        node_output = history['outputs'][node_id]
+    history = get_history(prompt_id).get(prompt_id) or {}
+    status = (history.get("status") or {}).get("status_str")
+    outputs = history.get("outputs") or {}
+    output_keys = {
+        node_id: sorted(node_output.keys())
+        for node_id, node_output in outputs.items()
+        if isinstance(node_output, dict)
+    }
+    logger.info(
+        "Comfy history: prompt_id=%s status=%s output_nodes=%s",
+        prompt_id,
+        status,
+        output_keys,
+    )
+    if execution_error is None:
+        execution_error = _comfy_execution_error_message(history.get("status") or {})
+
+    for node_id, node_output in outputs.items():
         videos_output = []
-        if 'gifs' in node_output:
-            for video in node_output['gifs']:
-                # Read the file from fullpath and encode as Base64
-                with open(video['fullpath'], 'rb') as f:
-                    video_data = base64.b64encode(f.read()).decode('utf-8')
-                videos_output.append(video_data)
+        if isinstance(node_output, dict) and "gifs" in node_output:
+            for video in node_output["gifs"]:
+                with open(video["fullpath"], "rb") as f:
+                    videos_output.append(base64.b64encode(f.read()).decode("utf-8"))
+                logger.info(
+                    "Found Comfy video output: node=%s path=%s",
+                    node_id,
+                    video.get("fullpath"),
+                )
         output_videos[node_id] = videos_output
+
+    if execution_error and not any(output_videos.values()):
+        raise Exception(execution_error)
 
     return output_videos
 
@@ -516,8 +557,10 @@ def handler(job):
 
     for node_id in videos:
         if videos[node_id]:
+            logger.info("Returning video from node %s (%s bytes base64)", node_id, len(videos[node_id][0]))
             return {"video": videos[node_id][0]}
-    
+
+    logger.error("No video in Comfy history outputs: %s", {k: len(v) for k, v in videos.items()})
     return {"error": "No video was found."}
 
 runpod.serverless.start({"handler": handler})
