@@ -133,6 +133,10 @@ The `input` object must contain the following fields. Images can be input using 
 | `image_path` | `string` | No | - | Local path to the input image |
 | `image_url` | `string` | No | - | URL of the input image |
 | `image_base64` | `string` | No | - | Base64 encoded string of the input image |
+| `end_image`, `end_image_url`, `end_image_base64` | `string` | No | - | Optional final frame; enables FLF2V and accepts the same URL/Base64 forms |
+| `catbox_userhash` | `string` | No | - | Catbox account hash used to archive URL/Base64 start and end images |
+
+When `catbox_userhash` is supplied, the worker uploads the exact resolved image files to Catbox before generation. Upload failures do not stop generation and are reported in `input_upload_warnings`. Catbox uploads are public; keep the user hash out of logs and source control.
 
 #### LoRA Configuration
 | Parameter | Type | Required | Default | Description |
@@ -162,13 +166,13 @@ The `input` object must contain the following fields. Images can be input using 
 | `height` | `integer` | No | `832` | Height of the output video in pixels |
 | `length` | `integer` | No | `81` | Length of the generated video |
 | `steps` | `integer` | No | `4` | Total denoising steps, always split in half across high/low noise |
-| `keep_models_loaded` | `boolean` | No | `false` | When `true`, skip the workflow's forced end-of-job model unload so a warm worker can reuse models when VRAM permits |
+| `keep_models_loaded` | `boolean` | No | `false` | When `true`, skip the workflow's forced end-of-job model unload so a warm worker can reuse models when VRAM/RAM headroom allows |
 
 `seed` of `-1` (or omitting `seed`) makes the handler draw a random seed and write it into the high-noise `RandomNoise` node. The low-noise sampler does not take a seed.
 
 `high_lora_strength` and `low_lora_strength` control the baked LightX2V lightning LoRAs on the high-noise and low-noise experts. They are separate from `lora_pairs`. When either value is greater than `0`, set `cfg` to `1.0`. LightX2V is a 4-step distill; CFG above 1 fights that distill (slower, more artifacts). The worker does not enforce this.
 
-`keep_models_loaded` must be a JSON boolean, not a string. ComfyUI may still selectively evict models when it needs VRAM; this option only disables the unconditional unload at the end of every job.
+`keep_models_loaded` must be a JSON boolean, not a string. The worker still unloads models when free VRAM is below 4 GiB or about 85% used (or host/cgroup RAM is similarly tight), including a Comfy `/free` call before generation so a previous keep-loaded job cannot OOM the next one. Tune with `MODEL_KEEP_MIN_FREE_VRAM_MB`, `MODEL_KEEP_MAX_VRAM_USED_RATIO`, `MODEL_KEEP_MIN_FREE_RAM_MB`, and `MODEL_KEEP_MAX_RAM_USED_RATIO`. ComfyUI may also selectively evict models during a job when it needs VRAM.
 
 **Request Examples:**
 
@@ -274,28 +278,40 @@ If the job is successful, it returns a JSON object with the generated video Base
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `video` | `string` | Base64 encoded video file data. |
+| `saved_input_url` | `string` or `null` | Durable Catbox URL for the resolved start image. |
+| `saved_end_input_url` | `string` or `null` | Durable Catbox URL for the optional resolved end image. |
+| `input_upload_warnings` | `array` | Non-fatal Catbox archival warnings. |
 
 **Success Response Example:**
 
 ```json
 {
-  "video": "data:video/mp4;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+  "video": "data:video/mp4;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+  "saved_input_url": "https://files.catbox.moe/example.jpg",
+  "saved_end_input_url": null,
+  "input_upload_warnings": []
 }
 ```
 
 #### Error
 
-If the job fails, it returns a JSON object containing an error message.
+If the job fails, it returns a JSON object containing an error message. Archival fields are still included when the start/end images were already uploaded.
 
 | Parameter | Type | Description |
 | --- | --- | --- |
 | `error` | `string` | Description of the error that occurred. |
+| `saved_input_url` | `string` or `null` | Durable Catbox URL for the resolved start image, if archival already succeeded. |
+| `saved_end_input_url` | `string` or `null` | Durable Catbox URL for the optional resolved end image, if archival already succeeded. |
+| `input_upload_warnings` | `array` | Non-fatal Catbox archival warnings. |
 
 **Error Response Example:**
 
 ```json
 {
-  "error": "Video not found."
+  "error": "No video was found.",
+  "saved_input_url": "https://files.catbox.moe/example.jpg",
+  "saved_end_input_url": null,
+  "input_upload_warnings": []
 }
 ```
 

@@ -1,11 +1,37 @@
 import copy
 import json
+import os
+import sys
+import tempfile
+import types
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from generate_video_client import GenerateVideoClient
-from workflow_options import configure_model_retention, get_keep_models_loaded
+from workflow_options import (
+    MIB,
+    configure_model_retention,
+    get_keep_models_loaded,
+    get_retention_thresholds,
+    memory_pressure_reasons,
+    parse_cgroup_memory,
+    parse_comfy_system_stats,
+    parse_meminfo,
+    parse_nvidia_smi_csv,
+    resolve_keep_models_loaded,
+)
+
+mock_runpod = types.ModuleType("runpod")
+mock_runpod.serverless = types.ModuleType("serverless")
+mock_runpod.serverless.start = lambda config: None
+mock_runpod.serverless.utils = types.ModuleType("utils")
+mock_runpod.serverless.utils.rp_upload = lambda value: None
+sys.modules.setdefault("runpod", mock_runpod)
+sys.modules.setdefault("runpod.serverless", mock_runpod.serverless)
+sys.modules.setdefault("runpod.serverless.utils", mock_runpod.serverless.utils)
+
+import handler
 
 
 WORKFLOW_DIR = Path(__file__).parent / "workflow"
@@ -90,6 +116,325 @@ class ModelRetentionTests(unittest.TestCase):
                 image=b"test-image",
                 keep_models_loaded="true",
             )
+
+
+class MemoryPressureTests(unittest.TestCase):
+    def test_plenty_of_memory_is_not_pressure(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 20 * MIB * 1024,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        self.assertEqual([], memory_pressure_reasons(stats))
+
+    def test_low_free_vram_is_pressure(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 1024 * MIB,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        reasons = memory_pressure_reasons(stats)
+        self.assertTrue(any("VRAM free" in reason for reason in reasons))
+
+    def test_high_vram_used_ratio_is_pressure(self):
+        stats = {
+            "vram_total": 40 * MIB * 1024,
+            "vram_free": 4 * MIB * 1024,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        reasons = memory_pressure_reasons(stats)
+        self.assertTrue(any("VRAM used" in reason for reason in reasons))
+
+    def test_low_free_ram_is_pressure(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 20 * MIB * 1024,
+            "ram_total": 16 * MIB * 1024,
+            "ram_free": 512 * MIB,
+        }
+        reasons = memory_pressure_reasons(stats)
+        self.assertTrue(any("RAM free" in reason for reason in reasons))
+
+    def test_missing_stats_do_not_force_unload(self):
+        self.assertEqual([], memory_pressure_reasons({}))
+        keep, reasons = resolve_keep_models_loaded(True, {})
+        self.assertTrue(keep)
+        self.assertEqual([], reasons)
+
+    def test_keep_request_is_overridden_on_pressure(self):
+        stats = {"vram_total": 24 * MIB * 1024, "vram_free": 512 * MIB}
+        keep, reasons = resolve_keep_models_loaded(True, stats)
+        self.assertFalse(keep)
+        self.assertTrue(reasons)
+
+    def test_explicit_unload_stays_unload_even_with_headroom(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 20 * MIB * 1024,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        keep, reasons = resolve_keep_models_loaded(False, stats)
+        self.assertFalse(keep)
+        self.assertEqual([], reasons)
+
+    def test_parse_comfy_system_stats_prefers_cuda_device(self):
+        payload = {
+            "system": {"ram_total": 64 * MIB, "ram_free": 8 * MIB},
+            "devices": [
+                {"type": "cpu", "vram_total": 1, "vram_free": 1},
+                {"type": "cuda", "vram_total": 32 * MIB, "vram_free": 4 * MIB},
+            ],
+        }
+        self.assertEqual(
+            {
+                "ram_total": 64 * MIB,
+                "ram_free": 8 * MIB,
+                "vram_total": 32 * MIB,
+                "vram_free": 4 * MIB,
+            },
+            parse_comfy_system_stats(payload),
+        )
+
+    def test_parse_nvidia_smi_and_meminfo(self):
+        self.assertEqual(
+            {"vram_total": 32768 * MIB, "vram_free": 4096 * MIB},
+            parse_nvidia_smi_csv("32768, 4096\n"),
+        )
+        self.assertEqual(
+            {"ram_total": 32768000 * 1024, "ram_free": 8192000 * 1024},
+            parse_meminfo("MemTotal: 32768000 kB\nMemAvailable: 8192000 kB\n"),
+        )
+
+    def test_parse_cgroup_ignores_unlimited_and_reads_limits(self):
+        self.assertEqual({}, parse_cgroup_memory("100", "max"))
+        self.assertEqual({}, parse_cgroup_memory("100", str(1 << 62)))
+        self.assertEqual(
+            {"ram_total": 8 * MIB, "ram_free": 3 * MIB},
+            parse_cgroup_memory(str(5 * MIB), str(8 * MIB)),
+        )
+
+    def test_thresholds_read_env(self):
+        with patch.dict(os.environ, {
+            "MODEL_KEEP_MIN_FREE_VRAM_MB": "4096",
+            "MODEL_KEEP_MAX_VRAM_USED_RATIO": "0.5",
+            "MODEL_KEEP_MIN_FREE_RAM_MB": "1024",
+            "MODEL_KEEP_MAX_RAM_USED_RATIO": "0.8",
+        }):
+            thresholds = get_retention_thresholds()
+        self.assertEqual(4096 * MIB, thresholds["min_free_vram_bytes"])
+        self.assertEqual(0.5, thresholds["max_vram_used_ratio"])
+        self.assertEqual(1024 * MIB, thresholds["min_free_ram_bytes"])
+        self.assertEqual(0.8, thresholds["max_ram_used_ratio"])
+
+    def test_handler_unloads_and_frees_on_tight_vram(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 512 * MIB,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        with (
+            patch.object(handler, "collect_memory_stats", return_value=stats),
+            patch.object(handler, "free_comfy_models") as free_models,
+        ):
+            keep, returned_stats, reasons = handler.apply_dynamic_model_retention(True)
+
+        self.assertFalse(keep)
+        self.assertEqual(stats, returned_stats)
+        self.assertTrue(reasons)
+        free_models.assert_called_once()
+
+    def test_handler_keeps_models_when_there_is_headroom(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 20 * MIB * 1024,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        with (
+            patch.object(handler, "collect_memory_stats", return_value=stats),
+            patch.object(handler, "free_comfy_models") as free_models,
+        ):
+            keep, _, reasons = handler.apply_dynamic_model_retention(True)
+
+        self.assertTrue(keep)
+        self.assertEqual([], reasons)
+        free_models.assert_not_called()
+
+    def test_handler_frees_leftover_models_even_when_keep_was_false(self):
+        stats = {
+            "vram_total": 32 * MIB * 1024,
+            "vram_free": 512 * MIB,
+            "ram_total": 64 * MIB * 1024,
+            "ram_free": 32 * MIB * 1024,
+        }
+        with (
+            patch.object(handler, "collect_memory_stats", return_value=stats),
+            patch.object(handler, "free_comfy_models") as free_models,
+        ):
+            keep, _, reasons = handler.apply_dynamic_model_retention(False)
+
+        self.assertFalse(keep)
+        self.assertTrue(reasons)
+        free_models.assert_called_once()
+
+
+class FakeHttpResponse:
+    def __init__(self, body=b""):
+        self.body = body
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, traceback):
+        return False
+
+    def read(self):
+        return self.body
+
+
+def _request_url(request):
+    if isinstance(request, str):
+        return request
+    return request.full_url
+
+
+class HandlerRuntimeTests(unittest.TestCase):
+    def _run_job(self, vram_free, keep_models_loaded=True):
+        captured = {}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            image = Path(temp_dir) / "start.png"
+            image.write_bytes(b"png-bytes")
+            output_dir = Path(temp_dir) / "output"
+            input_dir = Path(temp_dir) / "input"
+            comfy_temp = Path(temp_dir) / "temp"
+            output_dir.mkdir()
+            input_dir.mkdir()
+            comfy_temp.mkdir()
+            video_path = Path(temp_dir) / "result.mp4"
+            video_path.write_bytes(b"mp4-bytes")
+
+            comfy_stats = {
+                "system": {"ram_total": 64 * 1024 ** 3, "ram_free": 32 * 1024 ** 3},
+                "devices": [{
+                    "type": "cuda",
+                    "index": 0,
+                    "name": "cuda:0",
+                    "vram_total": 32 * 1024 ** 3,
+                    "vram_free": vram_free,
+                }],
+            }
+
+            def fake_urlopen(request, timeout=None):
+                url = _request_url(request)
+                if url.endswith("/system_stats"):
+                    return FakeHttpResponse(json.dumps(comfy_stats).encode("utf-8"))
+                if url.endswith("/free"):
+                    captured["free"] = json.loads(request.data.decode("utf-8"))
+                    return FakeHttpResponse(b"")
+                if url.endswith("/prompt"):
+                    captured["prompt"] = json.loads(request.data.decode("utf-8"))
+                    return FakeHttpResponse(json.dumps({"prompt_id": "p1"}).encode("utf-8"))
+                if "/history/p1" in url:
+                    return FakeHttpResponse(json.dumps({
+                        "p1": {
+                            "status": {"status_str": "success"},
+                            "outputs": {
+                                "277": {"gifs": [{"fullpath": str(video_path)}]},
+                            },
+                        }
+                    }).encode("utf-8"))
+                return FakeHttpResponse(b"ok")
+
+            ws = Mock()
+            ws.recv.return_value = json.dumps({
+                "type": "executing",
+                "data": {"node": None, "prompt_id": "p1"},
+            })
+
+            with (
+                patch.dict(os.environ, {
+                    "COMFY_OUTPUT_DIR": str(output_dir),
+                    "COMFY_INPUT_DIR": str(input_dir),
+                    "COMFY_TEMP_DIR": str(comfy_temp),
+                    "COMFY_FREE_WAIT_SECONDS": "0",
+                }),
+                patch.object(handler.urllib.request, "urlopen", side_effect=fake_urlopen),
+                patch.object(handler, "read_nvidia_smi_stats", return_value={}),
+                patch.object(handler, "read_host_memory_stats", return_value={
+                    "ram_total": 64 * 1024 ** 3,
+                    "ram_free": 32 * 1024 ** 3,
+                }),
+                patch.object(handler, "connect_websocket", return_value=ws),
+            ):
+                result = handler.handler({
+                    "input": {
+                        "image_path": str(image),
+                        "prompt": "hello",
+                        "keep_models_loaded": keep_models_loaded,
+                    }
+                })
+
+            vram_nodes = []
+            queued = captured.get("prompt", {}).get("prompt", {})
+            for node in queued.values():
+                if node.get("class_type") == "VRAM_Debug":
+                    vram_nodes.append(node)
+            captured["vram_nodes"] = vram_nodes
+            captured["result"] = result
+            return captured
+
+    def test_full_handler_unloads_when_vram_is_below_4gb(self):
+        captured = self._run_job(vram_free=512 * 1024 ** 2, keep_models_loaded=True)
+        result = captured["result"]
+        self.assertIn("video", result)
+        self.assertNotIn("error", result)
+        self.assertEqual(
+            {"unload_models": True, "free_memory": True},
+            captured["free"],
+        )
+        self.assertTrue(captured["vram_nodes"])
+        self.assertTrue(all(
+            node["inputs"]["unload_all_models"] is True
+            for node in captured["vram_nodes"]
+        ))
+        queued = captured["prompt"]["prompt"]
+        self.assertTrue(queued["277"]["inputs"]["filename_prefix"].startswith("task_"))
+
+    def test_full_handler_keeps_models_when_vram_has_headroom(self):
+        captured = self._run_job(vram_free=20 * 1024 ** 3, keep_models_loaded=True)
+        result = captured["result"]
+        self.assertIn("video", result)
+        self.assertNotIn("error", result)
+        self.assertNotIn("free", captured)
+        self.assertTrue(captured["vram_nodes"])
+        self.assertTrue(all(
+            node["inputs"]["unload_all_models"] is False
+            for node in captured["vram_nodes"]
+        ))
+
+    def test_free_comfy_models_waits_until_vram_increases(self):
+        stats = [
+            {"vram_total": 32 * 1024 ** 3, "vram_free": 512 * 1024 ** 2},
+            {"vram_total": 32 * 1024 ** 3, "vram_free": 512 * 1024 ** 2},
+            {"vram_total": 32 * 1024 ** 3, "vram_free": 12 * 1024 ** 3},
+        ]
+        with (
+            patch.dict(os.environ, {"COMFY_FREE_WAIT_SECONDS": "5"}),
+            patch.object(handler, "fetch_comfy_system_stats", side_effect=stats),
+            patch.object(
+                handler.urllib.request,
+                "urlopen",
+                return_value=FakeHttpResponse(b""),
+            ),
+            patch.object(handler.time, "sleep") as sleep,
+        ):
+            handler.free_comfy_models()
+        self.assertEqual(2, sleep.call_count)
 
 
 class BakeConfigurationTests(unittest.TestCase):
