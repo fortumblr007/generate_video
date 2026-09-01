@@ -3,6 +3,7 @@
     {
       "name": "wan22_image_to_video_smoke_test",
       "input": {
+        "image_path": "/example_image.png",
         "prompt": "A cinematic portrait with subtle, natural movement and stable facial details",
         "negative_prompt": "blurry, distorted, low quality, artifacts, subtitles",
         "width": 480,
@@ -14,7 +15,7 @@
     }
   ],
   "config": {
-    "gpuTypeId": "NVIDIA GeForce RTX 5090",
+    "gpuTypeId": "NVIDIA A40",
     "gpuCount": 1,
     "allowedCudaVersions": [
       "12.8"
