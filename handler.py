@@ -323,7 +323,7 @@ def redacted_job_input(job_input):
     return safe
 
 
-def wait_for_http_server(http_url, max_attempts=180, retry_delay=1):
+def wait_for_http_server(http_url, max_attempts=300, retry_delay=1):
     for http_attempt in range(max_attempts):
         try:
             with urllib.request.urlopen(http_url, timeout=5):
