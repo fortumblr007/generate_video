@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 WORKFLOW_DIR = Path(__file__).parent / "workflow"
 DOCKERFILE = Path(__file__).parent / "Dockerfile"
+ENTRYPOINT = Path(__file__).parent / "entrypoint.sh"
 
 mock_runpod = types.ModuleType("runpod")
 mock_runpod.serverless = types.ModuleType("serverless")
@@ -121,6 +122,14 @@ class DockerfileCompatTests(unittest.TestCase):
             "mkdir -p /ComfyUI/input && cp /example_image.png /ComfyUI/input/example_image.png",
             dockerfile,
         )
+
+    def test_entrypoint_avoids_cgroup_ram_pressure(self):
+        entrypoint = ENTRYPOINT.read_text(encoding="utf-8")
+        self.assertIn("/sys/fs/cgroup/memory.max", entrypoint)
+        self.assertIn("--disable-pinned-memory", entrypoint)
+        self.assertIn("--fast-disk", entrypoint)
+        self.assertIn("--cache-none", entrypoint)
+        self.assertIn("MALLOC_ARENA_MAX", entrypoint)
 
 
 if __name__ == "__main__":

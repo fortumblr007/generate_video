@@ -429,13 +429,16 @@ def fetch_comfy_system_stats():
 
 def collect_memory_stats():
     stats = {}
-    stats.update(read_host_memory_stats())
     stats.update(read_nvidia_smi_stats())
     try:
         comfy_stats = fetch_comfy_system_stats()
         stats.update(comfy_stats)
     except Exception as error:
         logger.warning("Comfy /system_stats failed: %s", error)
+    # Apply host/cgroup RAM last. Comfy's /system_stats reports host-wide RAM on
+    # RunPod and must not overwrite the smaller cgroup limit used by the OOM
+    # killer. read_host_memory_stats already prefers cgroup values when present.
+    stats.update(read_host_memory_stats())
     return stats
 
 

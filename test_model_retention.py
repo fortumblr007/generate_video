@@ -217,6 +217,28 @@ class MemoryPressureTests(unittest.TestCase):
             parse_cgroup_memory(str(5 * MIB), str(8 * MIB)),
         )
 
+    def test_collect_memory_stats_keeps_cgroup_ram_over_comfy_host_ram(self):
+        cgroup_ram = {
+            "ram_total": 64 * 1024 * MIB,
+            "ram_free": 8 * 1024 * MIB,
+        }
+        comfy_host_stats = {
+            "ram_total": 1024 * 1024 * MIB,
+            "ram_free": 900 * 1024 * MIB,
+            "vram_total": 32 * 1024 * MIB,
+            "vram_free": 16 * 1024 * MIB,
+        }
+        with (
+            patch.object(handler, "read_host_memory_stats", return_value=cgroup_ram),
+            patch.object(handler, "read_nvidia_smi_stats", return_value={}),
+            patch.object(handler, "fetch_comfy_system_stats", return_value=comfy_host_stats),
+        ):
+            stats = handler.collect_memory_stats()
+
+        self.assertEqual(cgroup_ram["ram_total"], stats["ram_total"])
+        self.assertEqual(cgroup_ram["ram_free"], stats["ram_free"])
+        self.assertEqual(comfy_host_stats["vram_total"], stats["vram_total"])
+
     def test_thresholds_read_env(self):
         with patch.dict(os.environ, {
             "MODEL_KEEP_MIN_FREE_VRAM_MB": "4096",

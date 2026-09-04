@@ -50,6 +50,13 @@ the RunPod endpoint, then update the endpoint to the new immutable tag.
 The `.dockerignore` file keeps Git metadata, tests, bytecode, and local logs out
 of the image build context.
 
+At startup the worker logs both host RAM and its cgroup RAM limit. ComfyUI runs
+with pinned-memory offloading disabled because RunPod exposes host-wide RAM to
+ComfyUI even when the worker has a much smaller cgroup limit. Disk-backed model
+loading and no node-output cache further reduce RAM pressure from the two 14B
+models. The handler also gives cgroup measurements precedence over ComfyUI's
+host-wide `/system_stats` when deciding whether model retention is safe.
+
 ## Request model retention
 
 Send a real JSON boolean in each request:
