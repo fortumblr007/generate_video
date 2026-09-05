@@ -6,10 +6,10 @@
         "image_path": "/example_image.png",
         "prompt": "A cinematic portrait with subtle, natural movement and stable facial details",
         "negative_prompt": "blurry, distorted, low quality, artifacts, subtitles",
-        "width": 480,
-        "height": 720,
+        "width": 256,
+        "height": 256,
         "length": 5,
-        "keep_models_loaded": false
+        "keep_models_loaded": true
       },
       "timeout": 1800000
     }
@@ -19,16 +19,6 @@
     "gpuCount": 1,
     "allowedCudaVersions": [
       "12.8"
-    ],
-    "env": [
-      {
-        "key": "SCALING_MIN_QUEUE_TIME_MS",
-        "value": "1800000"
-      },
-      {
-        "key": "SCALING_THRESHOLD_BUFFER_MS",
-        "value": "1800000"
-      }
     ]
   }
 }

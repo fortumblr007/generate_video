@@ -36,6 +36,7 @@ import handler
 
 WORKFLOW_DIR = Path(__file__).parent / "workflow"
 DOCKERFILE = Path(__file__).parent / "Dockerfile"
+HUB_TESTS = Path(__file__).parent / ".runpod" / "tests.json"
 
 
 class ModelRetentionTests(unittest.TestCase):
@@ -460,6 +461,20 @@ class HandlerRuntimeTests(unittest.TestCase):
 
 
 class BakeConfigurationTests(unittest.TestCase):
+    def test_hub_smoke_test_fits_short_stale_job_window(self):
+        manifest = json.loads(HUB_TESTS.read_text(encoding="utf-8"))
+        smoke_input = manifest["tests"][0]["input"]
+
+        self.assertLessEqual(smoke_input["width"] * smoke_input["height"], 256 * 256)
+        self.assertLessEqual(smoke_input["length"], 5)
+        self.assertTrue(smoke_input["keep_models_loaded"])
+        env_keys = {
+            item["key"]
+            for item in manifest["config"].get("env", [])
+        }
+        self.assertNotIn("SCALING_MIN_QUEUE_TIME_MS", env_keys)
+        self.assertNotIn("SCALING_THRESHOLD_BUFFER_MS", env_keys)
+
     def test_dockerfile_exposes_bake_time_image_and_model_arguments(self):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("ARG BASE_IMAGE=", dockerfile)
