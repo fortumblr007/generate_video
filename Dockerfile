@@ -7,7 +7,8 @@ ARG WAN_HIGH_NOISE_MODEL_URI=hf://Comfy-Org/Wan_2.2_ComfyUI_Repackaged/split_fil
 ARG WAN_LOW_NOISE_MODEL_URI=hf://Comfy-Org/Wan_2.2_ComfyUI_Repackaged/split_files/diffusion_models/wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors
 ARG WAN_HIGH_NOISE_MODEL_SHA256=6122e79d55e0f235698d11d657f3b196c5273c830da00b2b013c5a048d5e6a42
 ARG WAN_LOW_NOISE_MODEL_SHA256=5471a457b6ac404202a5fbe6c11595a3d5641fc766b00f38763f72303fffc21e
-ARG MODEL_REFRESH=2026-08-23-1
+# Rebuild the large model layers instead of restoring the slow remote cache.
+ARG MODEL_REFRESH=2026-09-28-2
 
 RUN pip install --no-cache-dir -U "huggingface_hub[hf_transfer]" && \
     hf --help > /dev/null

@@ -48,7 +48,9 @@ not require editing six workflow files. The replacement files must remain
 compatible with the workflows' Wan 2.2 I2V high-noise and low-noise stages.
 The SHA-256 arguments make the build fail instead of silently baking an
 unexpected or incomplete model. Change `MODEL_REFRESH` for a deliberate fresh
-download when rebuilding the same commit and URIs.
+download when rebuilding the same commit and URIs. The v1.17 refresh also
+avoids restoring the large cached model layers that consumed most of the Hub's
+30-minute build window in v1.16; the verified model files remain the same.
 
 Replace `<registry>` with the Docker Hub or private-registry namespace used by
 the RunPod endpoint, then update the endpoint to the new immutable tag.
