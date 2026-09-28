@@ -167,11 +167,11 @@ class LightX2VStrengthTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "low_lora_strength"):
             get_lora_strength({"low_lora_strength": True}, "low_lora_strength", 1.0)
 
-    def test_allows_zero_and_values_outside_zero_one(self):
-        self.assertEqual(
-            0.0,
-            get_lora_strength({"high_lora_strength": 0}, "high_lora_strength", 0.4),
-        )
+    def test_rejects_zero_and_nonfinite_but_allows_positive_tuning(self):
+        with self.assertRaisesRegex(ValueError, "high_lora_strength"):
+            get_lora_strength({"high_lora_strength": 0}, "high_lora_strength", 0.4)
+        with self.assertRaisesRegex(ValueError, "low_lora_strength"):
+            get_lora_strength({"low_lora_strength": float("inf")}, "low_lora_strength", 1.0)
         self.assertEqual(
             1.5,
             get_lora_strength({"low_lora_strength": 1.5}, "low_lora_strength", 1.0),
@@ -310,4 +310,3 @@ class ConfigureSageAttentionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

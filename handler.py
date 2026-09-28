@@ -13,6 +13,7 @@ import subprocess
 import time
 import shutil
 import mimetypes
+from lora_presets import resolve_lora_presets
 from workflow_options import (
     DEFAULT_HIGH_LORA_STRENGTH,
     DEFAULT_LOW_LORA_STRENGTH,
@@ -621,78 +622,31 @@ def get_next_available_node_id(prompt, start_id=1000):
         node_id += 1
     return str(node_id)
 
-def count_user_loras(lora_pairs):
-    """Count user LoRA pairs, excluding lightx2v_4steps_lora."""
-    if not lora_pairs:
-        return 0
-    
-    count = 0
-    for lora_pair in lora_pairs:
-        high = lora_pair.get("high", "")
-        low = lora_pair.get("low", "")
-        
-        # Skip baked LightX2V 4-step LoRAs
-        if high and "lightx2v_4steps_lora" not in high:
-            count += 1
-        elif low and "lightx2v_4steps_lora" not in low:
-            count += 1
-        elif high and low and "lightx2v_4steps_lora" not in high and "lightx2v_4steps_lora" not in low:
-            count += 1
-    
-    return count
-
-def filter_user_loras(lora_pairs):
-    """Return user LoRA pairs with lightx2v_4steps_lora entries removed."""
-    if not lora_pairs:
-        return []
-    
-    filtered = []
-    for lora_pair in lora_pairs:
-        high = lora_pair.get("high", "")
-        low = lora_pair.get("low", "")
-        
-        if high and "lightx2v_4steps_lora" in high:
-            continue
-        if low and "lightx2v_4steps_lora" in low:
-            continue
-        
-        filtered.append(lora_pair)
-    
-    return filtered
-
-def apply_loras_to_workflow(prompt, lora_pairs, is_flf2v, workflow_file):
+def apply_loras_to_workflow(prompt, preset_pairs, workflow_file):
     """
-    Apply user LoRA names and strengths to the pre-wired LoRA nodes.
+    Apply baked preset LoRA names and strengths to the pre-wired LoRA nodes.
 
     Each workflow JSON already contains the LoRA chain; this only updates
     lora_name and strength_model on those nodes.
     """
-    if not lora_pairs:
+    if not preset_pairs:
         return
     
-    # User LoRA node IDs per workflow file (HIGH, then LOW)
-    # HIGH: UNETLoader(230) -> lightx2v(283) -> user LoRAs -> TorchCompile(391)
-    # LOW: UNETLoader(235) -> lightx2v(284) -> user LoRAs -> TorchCompile(390)
+    # Preset LoRA node IDs per workflow file (HIGH, then LOW)
+    # HIGH: UNETLoader(230) -> lightx2v(283) -> presets -> TorchCompile(391)
+    # LOW: UNETLoader(235) -> lightx2v(284) -> presets -> TorchCompile(390)
     lora_node_mapping = {
         "workflow/wan22_nolora.json": {
             "high": [],
             "low": []
         },
         "workflow/wan22_1lora.json": {
-            "high": ["282"],  # first user LoRA after lightx2v(283)
-            "low": ["336"]   # first user LoRA after lightx2v(284)
+            "high": ["282"],  # first preset after lightx2v(283)
+            "low": ["336"]   # first preset after lightx2v(284)
         },
         "workflow/wan22_2lora.json": {
             "high": ["282", "339"],  # lightx2v(283) -> 282 -> 339
             "low": ["336", "285"]    # lightx2v(284) -> 336 -> 285
-        },
-        "workflow/wan22_3lora.json": {
-            "high": ["282", "339", "340"],  # lightx2v(283) -> 282 -> 339 -> 340
-            "low": ["336", "285", "286"]    # lightx2v(284) -> 336 -> 285 -> 286
-        },
-        "workflow/wan22_4lora.json": {
-            "high": ["282", "339", "340", "341"],  # lightx2v(283) -> 282 -> 339 -> 340 -> 341
-            "low": ["336", "285", "286", "337"]    # lightx2v(284) -> 336 -> 285 -> 286 -> 337
         },
         "workflow/wan22_flf2v.json": {
             "high": [],
@@ -707,27 +661,25 @@ def apply_loras_to_workflow(prompt, lora_pairs, is_flf2v, workflow_file):
             break
     
     if workflow_key is None:
-        logger.warning(f"No LoRA node mapping for workflow file {workflow_file}")
-        return
+        raise ValueError(f"No LoRA node mapping for workflow file {workflow_file}")
     
-    high_user_nodes = lora_node_mapping[workflow_key]["high"]
-    low_user_nodes = lora_node_mapping[workflow_key]["low"]
+    high_preset_nodes = lora_node_mapping[workflow_key]["high"]
+    low_preset_nodes = lora_node_mapping[workflow_key]["low"]
     
     logger.info(f"Workflow: {workflow_key}")
-    logger.info(f"HIGH user LoRA nodes: {high_user_nodes}")
-    logger.info(f"LOW user LoRA nodes: {low_user_nodes}")
+    logger.info(f"HIGH preset LoRA nodes: {high_preset_nodes}")
+    logger.info(f"LOW preset LoRA nodes: {low_preset_nodes}")
     
-    if len(high_user_nodes) < len(lora_pairs) or len(low_user_nodes) < len(lora_pairs):
-        logger.warning(
-            f"Not enough user LoRA nodes in the workflow. "
-            f"needed HIGH={len(lora_pairs)}, LOW={len(lora_pairs)}, "
-            f"found HIGH={len(high_user_nodes)}, LOW={len(low_user_nodes)}"
+    if len(high_preset_nodes) < len(preset_pairs) or len(low_preset_nodes) < len(preset_pairs):
+        raise ValueError(
+            f"Not enough preset LoRA nodes in the workflow. "
+            f"needed HIGH={len(preset_pairs)}, LOW={len(preset_pairs)}, "
+            f"found HIGH={len(high_preset_nodes)}, LOW={len(low_preset_nodes)}"
         )
-        return
     
-    for i, lora_pair in enumerate(lora_pairs):
-        if i < len(high_user_nodes) and lora_pair.get("high"):
-            high_node_id = high_user_nodes[i]
+    for i, lora_pair in enumerate(preset_pairs):
+        if i < len(high_preset_nodes) and lora_pair.get("high"):
+            high_node_id = high_preset_nodes[i]
             prompt[high_node_id]["inputs"]["lora_name"] = lora_pair["high"]
             prompt[high_node_id]["inputs"]["strength_model"] = lora_pair.get("high_weight", 1.0)
             logger.info(
@@ -735,8 +687,8 @@ def apply_loras_to_workflow(prompt, lora_pairs, is_flf2v, workflow_file):
                 f"(strength: {lora_pair.get('high_weight', 1.0)}) -> node {high_node_id}"
             )
         
-        if i < len(low_user_nodes) and lora_pair.get("low"):
-            low_node_id = low_user_nodes[i]
+        if i < len(low_preset_nodes) and lora_pair.get("low"):
+            low_node_id = low_preset_nodes[i]
             prompt[low_node_id]["inputs"]["lora_name"] = lora_pair["low"]
             prompt[low_node_id]["inputs"]["strength_model"] = lora_pair.get("low_weight", 1.0)
             logger.info(
@@ -834,11 +786,9 @@ def handler(job):
 
         is_flf2v = end_image_path_local is not None
 
-        lora_pairs = job_input.get("lora_pairs", [])
-        user_lora_pairs = filter_user_loras(lora_pairs)
-        lora_count = count_user_loras(lora_pairs)
-
-        logger.info(f"User LoRA count (excluding lightx2v): {lora_count}")
+        preset_lora_pairs = resolve_lora_presets(job_input, is_flf2v)
+        lora_count = len(preset_lora_pairs)
+        logger.info("Selected LoRA preset count: %s", lora_count)
 
         if is_flf2v:
             workflow_file = "workflow/wan22_flf2v.json"
@@ -850,17 +800,6 @@ def handler(job):
                 workflow_file = "workflow/wan22_1lora.json"
             elif lora_count == 2:
                 workflow_file = "workflow/wan22_2lora.json"
-            elif lora_count == 3:
-                workflow_file = "workflow/wan22_3lora.json"
-            elif lora_count >= 4:
-                workflow_file = "workflow/wan22_4lora.json"
-                if lora_count > 4:
-                    logger.warning(
-                        f"LoRA count is {lora_count}. Only the first 4 pairs are supported."
-                    )
-                    user_lora_pairs = user_lora_pairs[:4]
-            else:
-                workflow_file = "workflow/wan22_nolora.json"
 
             logger.info(f"Using single image workflow: {workflow_file} (LoRA count: {lora_count})")
 
@@ -932,8 +871,8 @@ def handler(job):
         if is_flf2v:
             prompt["483"]["inputs"]["image"] = end_image_name
 
-        if user_lora_pairs:
-            apply_loras_to_workflow(prompt, user_lora_pairs, is_flf2v, workflow_file)
+        if preset_lora_pairs:
+            apply_loras_to_workflow(prompt, preset_lora_pairs, workflow_file)
 
         ws_url = f"ws://{server_address}:8188/ws?clientId={client_id}"
         logger.info(f"Connecting to WebSocket: {ws_url}")

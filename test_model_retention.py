@@ -488,7 +488,7 @@ class BakeConfigurationTests(unittest.TestCase):
         self.assertIn("--local-dir /tmp/wan-high --force-download", dockerfile)
         self.assertIn("--local-dir /tmp/wan-low --force-download", dockerfile)
         self.assertNotIn("wget ", dockerfile)
-        self.assertEqual(dockerfile.count("hf download "), 7)
+        self.assertEqual(dockerfile.count("hf download "), 11)
 
     def test_baked_models_are_refreshed_and_checksum_verified(self):
         dockerfile = DOCKERFILE.read_text(encoding="utf-8")
@@ -497,7 +497,14 @@ class BakeConfigurationTests(unittest.TestCase):
         self.assertIn("ARG WAN_LOW_NOISE_MODEL_SHA256=", dockerfile)
         self.assertIn("${WAN_HIGH_NOISE_MODEL_SHA256}", dockerfile)
         self.assertIn("${WAN_LOW_NOISE_MODEL_SHA256}", dockerfile)
-        self.assertEqual(2, dockerfile.count("sha256sum -c -"))
+        self.assertEqual(6, dockerfile.count("sha256sum -c -"))
+        for filename in (
+            "WAN22_assume_the_position_high.safetensors",
+            "WAN22_assume_the_position_low.safetensors",
+            "Airb-high-80.safetensors",
+            "Airb-low-70.safetensors",
+        ):
+            self.assertIn(f"/ComfyUI/models/loras/{filename}", dockerfile)
 
     def test_baked_model_destinations_match_every_workflow(self):
         expected_models = {

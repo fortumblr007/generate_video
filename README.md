@@ -1,6 +1,6 @@
 # Wan2.2 Generate Video API Client
 
-This project provides a Python client for generating videos from images using **Wan2.2** through a RunPod Serverless endpoint. The worker uses ComfyUI's native dual-pass ksampler (high-noise then low-noise), baked LightX2V 4-step LoRAs, and optional user LoRA pairs.
+This project provides a Python client for generating videos from images using **Wan2.2** through a RunPod Serverless endpoint. The worker uses ComfyUI's native dual-pass ksampler (high-noise then low-noise), baked LightX2V 4-step LoRAs, and two selectable baked LoRA presets for single-image requests.
 
 [![Runpod](https://api.runpod.io/badge/fortumblr007/generate_video)](https://console.runpod.io/hub/listing/fortumblr007/generate_video)
 
@@ -17,7 +17,7 @@ This Wan2.2 client is primarily designed for **Engui Studio**, a comprehensive A
 *   **Wan2.2 Model**: Powered by the advanced Wan2.2 AI model for high-quality video generation.
 *   **Image-to-Video Generation**: Converts static images into dynamic videos with natural motion.
 *   **Base64 Encoding Support**: Handles image encoding/decoding automatically.
-*   **LoRA Configuration**: Baked LightX2V lightning LoRAs plus up to 4 extra high/low user LoRA pairs.
+*   **LoRA Configuration**: Baked LightX2V lightning LoRAs plus two selectable high/low LoRA presets.
 *   **Batch Processing**: Process multiple images in a single operation.
 *   **Error Handling**: Comprehensive error handling and logging.
 *   **Async Job Management**: Automatic job submission and status monitoring.
@@ -30,7 +30,7 @@ This template includes all the necessary components to run **Wan2.2** as a RunPo
 *   **Dockerfile**: Configures the environment and installs all dependencies required for Wan2.2 model execution.
 *   **handler.py**: Implements the handler function that processes requests for RunPod Serverless.
 *   **entrypoint.sh**: Performs initialization tasks when the worker starts.
-*   **workflow/wan22_*.json**: Dual-pass Wan 2.2 I2V graphs (no-LoRA through 4 LoRA pairs, plus FLF2V).
+*   **workflow/wan22_*.json**: Dual-pass Wan 2.2 I2V graphs (zero, one, or two selected presets, plus FLF2V).
 *   Requires a **32GB+** GPU (5090 / 5000 Ada / A6000 / A40 / L40 class). 24GB cards (4090) will OOM when both 14B experts load.
 
 ## 📖 Python Client Usage
@@ -71,15 +71,8 @@ else:
 ### Using LoRA
 
 ```python
-# Configure LoRA pairs
-lora_pairs = [
-    {
-        "high": "your_high_lora.safetensors",
-        "low": "your_low_lora.safetensors",
-        "high_weight": 1.0,
-        "low_weight": 1.0
-    }
-]
+# Select either or both baked presets. Omitted weights use 0.8 high and 0.7 low.
+lora_presets = [{"name": "assume_the_position"}]
 
 # Generate video with LoRA
 result = client.create_video_from_image(
@@ -94,7 +87,7 @@ result = client.create_video_from_image(
     cfg=1.0,
     high_lora_strength=0.4,
     low_lora_strength=1.0,
-    lora_pairs=lora_pairs
+    lora_presets=lora_presets
 )
 ```
 
@@ -141,17 +134,18 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
 #### LoRA Configuration
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `lora_pairs` | `array` | No | `[]` | Array of LoRA pairs. Each pair contains `high`, `low`, `high_weight`, `low_weight` |
+| `lora_presets` | `array` | No | `[]` | Select `assume_the_position`, `airblow`, or both for single-image requests |
 
-**Important**: To use LoRA models, you must upload the LoRA files to the `/loras/` folder in your RunPod Network Volume. The LoRA model names in `lora_pairs` should match the filenames in the `/loras/` folder.
+All four preset files are baked into the image. No network volume is needed for these LoRAs. The old filename-based `lora_pairs` field is rejected.
 
-#### LoRA Pair Structure
+#### LoRA Preset Structure
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `high` | `string` | Yes | - | High LoRA model name |
-| `low` | `string` | Yes | - | Low LoRA model name |
-| `high_weight` | `float` | No | `1.0` | High LoRA weight |
-| `low_weight` | `float` | No | `1.0` | Low LoRA weight |
+| `name` | `string` | Yes | - | `assume_the_position` or `airblow` |
+| `high_weight` | `float` | No | `0.8` | High-noise LoRA weight |
+| `low_weight` | `float` | No | `0.7` | Low-noise LoRA weight |
+
+Duplicate or unknown presets and non-finite weights are rejected. First/last-frame requests do not support nonempty `lora_presets`.
 
 #### Video Generation Parameters
 | Parameter | Type | Required | Default | Description |
@@ -160,8 +154,8 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
 | `negative_prompt` | `string` | No | - | Negative prompt to exclude unwanted elements from the video |
 | `seed` | `integer` | No | `-1` | RandomNoise seed. `-1` (default) makes the handler pick a random seed |
 | `cfg` | `float` | No | `1.0` | CFG scale for the high-noise pass |
-| `high_lora_strength` | `float` | No | `0.4` | Strength of the baked high-noise LightX2V 4-step LoRA (not `lora_pairs`) |
-| `low_lora_strength` | `float` | No | `1.0` | Strength of the baked low-noise LightX2V 4-step LoRA (not `lora_pairs`) |
+| `high_lora_strength` | `float` | No | `0.4` | Strength of the baked high-noise LightX2V 4-step LoRA |
+| `low_lora_strength` | `float` | No | `1.0` | Strength of the baked low-noise LightX2V 4-step LoRA |
 | `width` | `integer` | No | `480` | Width of the output video in pixels |
 | `height` | `integer` | No | `832` | Height of the output video in pixels |
 | `length` | `integer` | No | `81` | Length of the generated video |
@@ -170,13 +164,13 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
 
 `seed` of `-1` (or omitting `seed`) makes the handler draw a random seed and write it into the high-noise `RandomNoise` node. The low-noise sampler does not take a seed.
 
-`high_lora_strength` and `low_lora_strength` control the baked LightX2V lightning LoRAs on the high-noise and low-noise experts. They are separate from `lora_pairs`. When either value is greater than `0`, set `cfg` to `1.0`. LightX2V is a 4-step distill; CFG above 1 fights that distill (slower, more artifacts). The worker does not enforce this.
+`high_lora_strength` and `low_lora_strength` control the baked LightX2V lightning LoRAs on the high-noise and low-noise experts. Both must be positive finite numbers, so LightX2V stays enabled. Set `cfg` to `1.0` with LightX2V; CFG above 1 fights that distill (slower, more artifacts). The worker does not enforce the CFG recommendation.
 
 `keep_models_loaded` must be a JSON boolean, not a string. The worker still unloads models when free VRAM is below 4 GiB or about 85% used (or host/cgroup RAM is similarly tight), including a Comfy `/free` call before generation so a previous keep-loaded job cannot OOM the next one. Tune with `MODEL_KEEP_MIN_FREE_VRAM_MB`, `MODEL_KEEP_MAX_VRAM_USED_RATIO`, `MODEL_KEEP_MIN_FREE_RAM_MB`, and `MODEL_KEEP_MAX_RAM_USED_RATIO`. ComfyUI may also selectively evict models during a job when it needs VRAM.
 
 **Request Examples:**
 
-#### 1. Basic Generation (No LoRA)
+#### 1. Basic Generation (LightX2V only)
 ```json
 {
   "input": {
@@ -196,7 +190,7 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
 }
 ```
 
-#### 2. With LoRA Pairs
+#### 2. With One LoRA Preset
 ```json
 {
   "input": {
@@ -209,19 +203,12 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
     "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
-    "lora_pairs": [
-      {
-        "high": "your_high_lora.safetensors",
-        "low": "your_low_lora.safetensors",
-        "high_weight": 1.0,
-        "low_weight": 1.0
-      }
-    ]
+    "lora_presets": [{"name": "assume_the_position"}]
   }
 }
 ```
 
-#### 3. Multiple LoRA Pairs (up to 4)
+#### 3. Both LoRA Presets
 ```json
 {
   "input": {
@@ -234,19 +221,9 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
     "low_lora_strength": 1.0,
     "width": 480,
     "height": 832,
-    "lora_pairs": [
-      {
-        "high": "lora1_high.safetensors",
-        "low": "lora1_low.safetensors",
-        "high_weight": 1.0,
-        "low_weight": 1.0
-      },
-      {
-        "high": "lora2_high.safetensors",
-        "low": "lora2_low.safetensors",
-        "high_weight": 1.0,
-        "low_weight": 1.0
-      }
+    "lora_presets": [
+      {"name": "assume_the_position"},
+      {"name": "airblow", "high_weight": 0.6, "low_weight": 0.5}
     ]
   }
 }
@@ -322,16 +299,11 @@ If the job fails, it returns a JSON object containing an error message. Archival
 
 ### 📁 Using Network Volumes
 
-Instead of directly transmitting Base64 encoded files, you can use RunPod's Network Volumes to handle large files. This is especially useful when dealing with large image files and LoRA models.
+Instead of directly transmitting Base64 encoded images, you can use RunPod's Network Volumes to handle large image files. The preset LoRAs are already in the worker image.
 
 1.  **Create and Connect Network Volume**: Create a Network Volume (e.g., S3-based volume) from the RunPod dashboard and connect it to your Serverless Endpoint settings.
-2.  **Upload Files**: Upload the image files and LoRA models you want to use to the created Network Volume.
-3.  **File Organization**: 
-    - Place your input images anywhere in the Network Volume
-    - Place LoRA model files in the `/loras/` folder within the Network Volume
-4.  **Specify Paths**: When making an API request, specify the file paths within the Network Volume:
-    - For `image_path`: Use the full path to your image file (e.g., `"/my_volume/images/portrait.jpg"`)
-    - For LoRA models: Use only the filename (e.g., `"my_lora_model.safetensors"`) - the system will automatically look in the `/loras/` folder
+2.  **Upload Files**: Upload input images to the Network Volume.
+3.  **Specify Paths**: Set `image_path` to the full path to an image (e.g., `"/my_volume/images/portrait.jpg"`). Select LoRAs with `lora_presets`.
 
 ## 🔧 Client Methods
 
@@ -355,7 +327,7 @@ Generate video from a single image.
 - `cfg` (float): High-noise CFG scale (default: 1.0)
 - `high_lora_strength` (float): Baked high-noise LightX2V LoRA strength (default: 0.4)
 - `low_lora_strength` (float): Baked low-noise LightX2V LoRA strength (default: 1.0)
-- `lora_pairs` (list): LoRA configuration pairs (default: None)
+- `lora_presets` (list): Selected baked presets (default: none; each selected preset defaults to high weight 0.8 and low weight 0.7)
 - `keep_models_loaded` (bool): Skip forced end-of-job model unloading (default: False)
 
 #### `batch_process_images(image_folder_path, output_folder_path, valid_extensions, ...)`
@@ -378,7 +350,7 @@ Save video result to file.
 
 This worker uses native ComfyUI ksampler graphs under `workflow/`:
 
-*   **wan22_nolora.json** through **wan22_4lora.json**: single-image I2V, selected by user LoRA count
+*   **wan22_nolora.json** through **wan22_2lora.json**: single-image I2V, selected by preset count
 *   **wan22_flf2v.json**: first-and-last-frame I2V when `end_image*` is set
 
 Each graph runs a high-noise expert then a low-noise expert (steps split in half), baked LightX2V LoRAs, Sage Attention, and RIFE frame interpolation. Torch compile is disabled at runtime.

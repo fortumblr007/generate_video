@@ -2,6 +2,7 @@
 
 import os
 import random
+import math
 
 RIFE_REQUIRED_DEFAULTS = {
     "dtype": "float32",
@@ -349,8 +350,9 @@ def configure_sampling(prompt, seed, steps, cfg):
 
 def get_lora_strength(job_input, key, default):
     strength = job_input.get(key, default)
-    if isinstance(strength, bool) or not isinstance(strength, (int, float)):
-        raise ValueError(f"{key} must be a number")
+    if (isinstance(strength, bool) or not isinstance(strength, (int, float))
+            or not math.isfinite(strength) or strength <= 0):
+        raise ValueError(f"{key} must be a positive finite number")
     return float(strength)
 
 

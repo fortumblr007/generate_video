@@ -280,7 +280,7 @@ class GenerateVideoClient:
         cfg: float = 1.0,
         high_lora_strength: float = 0.4,
         low_lora_strength: float = 1.0,
-        lora_pairs: Optional[List[Dict[str, Any]]] = None,
+        lora_presets: Optional[List[Dict[str, Any]]] = None,
         keep_models_loaded: bool = False
     ) -> Dict[str, Any]:
         """
@@ -305,7 +305,7 @@ class GenerateVideoClient:
             cfg: CFG scale for the high-noise ScheduledCFGGuidance node
             high_lora_strength: Strength of the baked high-noise LightX2V LoRA
             low_lora_strength: Strength of the baked low-noise LightX2V LoRA
-            lora_pairs: LoRA settings list (unlimited, each item: {"high": "lora_name.safetensors", "low": "lora_name.safetensors", "high_weight": 1.0, "low_weight": 1.0})
+            lora_presets: Baked preset selections ({"name": "assume_the_position" or "airblow", "high_weight": 0.8, "low_weight": 0.7})
             keep_models_loaded: Keep models in VRAM between warm-worker jobs when possible
         
         Returns:
@@ -357,9 +357,8 @@ class GenerateVideoClient:
         elif end_image_base64:
             end_image_data = end_image_base64  # Pass base64 directly
         
-        # Process LoRA settings
-        if lora_pairs is None:
-            lora_pairs = []
+        if lora_presets is None:
+            lora_presets = []
 
         if not isinstance(keep_models_loaded, bool):
             raise TypeError("keep_models_loaded must be a boolean")
@@ -376,7 +375,7 @@ class GenerateVideoClient:
             "cfg": cfg,
             "high_lora_strength": high_lora_strength,
             "low_lora_strength": low_lora_strength,
-            "lora_pairs": lora_pairs,
+            "lora_presets": lora_presets,
             "keep_models_loaded": keep_models_loaded
         }
         
@@ -411,7 +410,7 @@ class GenerateVideoClient:
         cfg: float = 1.0,
         high_lora_strength: float = 0.4,
         low_lora_strength: float = 1.0,
-        lora_pairs: Optional[List[Dict[str, Any]]] = None,
+        lora_presets: Optional[List[Dict[str, Any]]] = None,
         end_image: Optional[Union[str, bytes]] = None,
         keep_models_loaded: bool = False
     ) -> Dict[str, Any]:
@@ -432,7 +431,7 @@ class GenerateVideoClient:
             cfg: CFG scale for the high-noise ScheduledCFGGuidance node
             high_lora_strength: Strength of the baked high-noise LightX2V LoRA
             low_lora_strength: Strength of the baked low-noise LightX2V LoRA
-            lora_pairs: LoRA settings list (unlimited)
+            lora_presets: Baked preset selections for single-image requests
             end_image: End image for FLF2V workflow (optional)
             keep_models_loaded: Keep models in VRAM between warm-worker jobs when possible
         
@@ -484,7 +483,7 @@ class GenerateVideoClient:
                 cfg=cfg,
                 high_lora_strength=high_lora_strength,
                 low_lora_strength=low_lora_strength,
-                lora_pairs=lora_pairs,
+                lora_presets=lora_presets,
                 keep_models_loaded=keep_models_loaded
             )
             
@@ -560,27 +559,11 @@ def main():
     
     print("\n" + "-"*50 + "\n")
     
-    # Example 2: Processing with multiple LoRAs (unlimited)
-    print("2. Processing with multiple LoRAs")
-    lora_pairs = [
-        {
-            "high": "lora1_high.safetensors",
-            "low": "lora1_low.safetensors",
-            "high_weight": 1.0,
-            "low_weight": 1.0
-        },
-        {
-            "high": "lora2_high.safetensors",
-            "low": "lora2_low.safetensors",
-            "high_weight": 0.8,
-            "low_weight": 0.8
-        },
-        {
-            "high": "lora3_high.safetensors",
-            "low": "lora3_low.safetensors",
-            "high_weight": 0.5,
-            "low_weight": 0.5
-        }
+    # Example 2: Processing with both baked LoRA presets
+    print("2. Processing with both LoRA presets")
+    lora_presets = [
+        {"name": "assume_the_position"},
+        {"name": "airblow", "high_weight": 0.6, "low_weight": 0.5},
     ]
     
     result2 = client.create_video_from_image(
@@ -590,7 +573,7 @@ def main():
         width=720,
         height=1280,
         length=81,
-        lora_pairs=lora_pairs
+        lora_presets=lora_presets
     )
     
     if result2.get('status') == 'COMPLETED':

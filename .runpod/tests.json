@@ -6,6 +6,10 @@
         "image_path": "/example_image.png",
         "prompt": "A cinematic portrait with subtle, natural movement and stable facial details",
         "negative_prompt": "blurry, distorted, low quality, artifacts, subtitles",
+        "lora_presets": [
+          {"name": "assume_the_position"},
+          {"name": "airblow"}
+        ],
         "width": 256,
         "height": 256,
         "length": 5,
