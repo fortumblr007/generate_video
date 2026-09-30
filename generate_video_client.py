@@ -305,7 +305,7 @@ class GenerateVideoClient:
             cfg: CFG scale for the high-noise ScheduledCFGGuidance node
             high_lora_strength: Strength of the baked high-noise LightX2V LoRA
             low_lora_strength: Strength of the baked low-noise LightX2V LoRA
-            lora_presets: Baked preset selections ({"name": "assume_the_position" or "airblow", "high_weight": 0.8, "low_weight": 0.7})
+            lora_presets: Baked preset selections ({"name": "assume_the_position", "airblow", "clothes_on_off", "sudden_outfit_change", or "tittdrop", "high_weight": 0.8, "low_weight": 0.7})
             keep_models_loaded: Keep models in VRAM between warm-worker jobs when possible
         
         Returns:

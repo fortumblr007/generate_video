@@ -1,6 +1,6 @@
 {
     "title": "[fortumblr007] Wan2.2 + 4step LoRA",
-    "description": "Wan2.2 image-to-video with always-on LightX2V and two selectable baked LoRA presets: assume_the_position and airblow. Each preset defaults to high weight 0.8 and low weight 0.7.",
+    "description": "Wan2.2 image-to-video with always-on LightX2V and selectable baked LoRA presets: assume_the_position, airblow, clothes_on_off, sudden_outfit_change, and tittdrop. Up to two presets per request. Each preset defaults to high weight 0.8 and low weight 0.7. clothes_on_off and sudden_outfit_change are high-noise only.",
     "type": "serverless",
     "category": "video",
     "iconUrl": "https://github.com/Wan-Video/Wan2.2/blob/main/assets/logo.png?raw=true",

@@ -3,12 +3,15 @@
 The Dockerfile bakes ComfyUI, its custom nodes, both Wan 2.2 diffusion models,
 the text encoder, VAE, LoRAs, and RIFE checkpoint into one serverless image.
 Plan for a large build and registry upload.
-It also bakes four preset LoRA files: Assume the Position high/low from
+It also bakes the selectable preset LoRAs. Assume the Position high/low come from
 `Paolo222/DPaint` at `9f4f60c46049c67492dc9e2dbf3aa73fe2d7bbec`, and
 Airblow high/low from `helpfff/airblow` at
-`73876392857cd0c3d397ec0656de7e79d2dbd213`. Each file is checked
-against its pinned SHA-256 during the build. These public files do not require
-a Hugging Face token or a RunPod Network Volume.
+`73876392857cd0c3d397ec0656de7e79d2dbd213`. Clothes on/off and Sudden outfit
+change are high-noise only, from `Chroma111/CivitAI-Archive` at
+`9c1d298e58cb9508f8b85fd71edd7e3dce2ec7c7`. Tittdrop high/low come from
+`billybuckets/tittdrppp` at `3d4e10f281c7d0b0a3abeb7b2da3d3615856701b`.
+Each file is checked against its pinned SHA-256 during the build. These public
+files do not require a Hugging Face token or a RunPod Network Volume.
 
 The image installs `huggingface_hub` near the start of the build, which
 provides the `hf` CLI used by all baked Hugging Face artifact downloads. The

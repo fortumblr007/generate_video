@@ -76,6 +76,22 @@ RUN hf download "hf://helpfff/airblow@73876392857cd0c3d397ec0656de7e79d2dbd213/A
     install -m 0644 /tmp/airblow-low/Airb-low-70.safetensors /ComfyUI/models/loras/Airb-low-70.safetensors && \
     echo "6077e20aa161c9a8619a9aadbf63b5e7d4a737c8683048d7f6653c35a71c0c0e  /ComfyUI/models/loras/Airb-low-70.safetensors" | sha256sum -c - && \
     rm -rf /tmp/airblow-low
+RUN hf download "hf://Chroma111/CivitAI-Archive@9c1d298e58cb9508f8b85fd71edd7e3dce2ec7c7/wan_video/Wan_ClothesOnOff_Trend.safetensors" --local-dir /tmp/clothes-on-off --force-download && \
+    install -m 0644 /tmp/clothes-on-off/wan_video/Wan_ClothesOnOff_Trend.safetensors /ComfyUI/models/loras/Wan_ClothesOnOff_Trend.safetensors && \
+    echo "a7c10d427736ef18ab414778b54782c62b37bbba17e837da0edcc13c625448c1  /ComfyUI/models/loras/Wan_ClothesOnOff_Trend.safetensors" | sha256sum -c - && \
+    rm -rf /tmp/clothes-on-off
+RUN hf download "hf://Chroma111/CivitAI-Archive@9c1d298e58cb9508f8b85fd71edd7e3dce2ec7c7/wan_video/SuddenOutfitChange_V03.safetensors" --local-dir /tmp/sudden-outfit --force-download && \
+    install -m 0644 /tmp/sudden-outfit/wan_video/SuddenOutfitChange_V03.safetensors /ComfyUI/models/loras/SuddenOutfitChange_V03.safetensors && \
+    echo "50dac77073e92c13ccbdc5e27687df25596b4607d31da72e56a5c343f10f1450  /ComfyUI/models/loras/SuddenOutfitChange_V03.safetensors" | sha256sum -c - && \
+    rm -rf /tmp/sudden-outfit
+RUN hf download "hf://billybuckets/tittdrppp@3d4e10f281c7d0b0a3abeb7b2da3d3615856701b/wan 2.2 I2V t1ttydr0p_high_noise.safetensors" --local-dir /tmp/tittdrop-high --force-download && \
+    install -m 0644 "/tmp/tittdrop-high/wan 2.2 I2V t1ttydr0p_high_noise.safetensors" /ComfyUI/models/loras/t1ttydr0p_high_noise.safetensors && \
+    echo "3121f7f70eefb96261d44d2a10daec14f547dbeb70921cb9a8473ce1da4fbb06  /ComfyUI/models/loras/t1ttydr0p_high_noise.safetensors" | sha256sum -c - && \
+    rm -rf /tmp/tittdrop-high
+RUN hf download "hf://billybuckets/tittdrppp@3d4e10f281c7d0b0a3abeb7b2da3d3615856701b/wan 2.2 I2V t1ttydr0p_low_noise.safetensors" --local-dir /tmp/tittdrop-low --force-download && \
+    install -m 0644 "/tmp/tittdrop-low/wan 2.2 I2V t1ttydr0p_low_noise.safetensors" /ComfyUI/models/loras/t1ttydr0p_low_noise.safetensors && \
+    echo "0888e3c1db37d9659e44228e2bed8d7f9fdd6c826d19c566743a74142a1ea11a  /ComfyUI/models/loras/t1ttydr0p_low_noise.safetensors" | sha256sum -c - && \
+    rm -rf /tmp/tittdrop-low
 RUN echo "Wan model refresh: ${MODEL_REFRESH}" && \
     hf download "${WAN_HIGH_NOISE_MODEL_URI}" --local-dir /tmp/wan-high --force-download && \
     install -m 0644 /tmp/wan-high/split_files/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors /ComfyUI/models/diffusion_models/wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors && \

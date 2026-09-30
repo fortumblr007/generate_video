@@ -5,6 +5,7 @@ import math
 
 DEFAULT_HIGH_WEIGHT = 0.8
 DEFAULT_LOW_WEIGHT = 0.7
+MAX_PRESETS = 2
 
 PRESETS = {
     "assume_the_position": {
@@ -14,6 +15,16 @@ PRESETS = {
     "airblow": {
         "high": "Airb-high-80.safetensors",
         "low": "Airb-low-70.safetensors",
+    },
+    "clothes_on_off": {
+        "high": "Wan_ClothesOnOff_Trend.safetensors",
+    },
+    "sudden_outfit_change": {
+        "high": "SuddenOutfitChange_V03.safetensors",
+    },
+    "tittdrop": {
+        "high": "t1ttydr0p_high_noise.safetensors",
+        "low": "t1ttydr0p_low_noise.safetensors",
     },
 }
 
@@ -28,7 +39,7 @@ def resolve_lora_presets(job_input, is_flf2v=False):
         raise ValueError("lora_presets must be an array")
     if is_flf2v and selected:
         raise ValueError("lora_presets are supported only for single-image requests")
-    if len(selected) > len(PRESETS):
+    if len(selected) > MAX_PRESETS:
         raise ValueError("lora_presets supports at most two presets")
 
     resolved = []

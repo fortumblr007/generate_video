@@ -1,6 +1,6 @@
 # Wan2.2 Generate Video API Client
 
-This project provides a Python client for generating videos from images using **Wan2.2** through a RunPod Serverless endpoint. The worker uses ComfyUI's native dual-pass ksampler (high-noise then low-noise), baked LightX2V 4-step LoRAs, and two selectable baked LoRA presets for single-image requests.
+This project provides a Python client for generating videos from images using **Wan2.2** through a RunPod Serverless endpoint. The worker uses ComfyUI's native dual-pass ksampler (high-noise then low-noise), baked LightX2V 4-step LoRAs, and five selectable baked LoRA presets for single-image requests. A request can use up to two of them.
 
 [![Runpod](https://api.runpod.io/badge/fortumblr007/generate_video)](https://console.runpod.io/hub/listing/fortumblr007/generate_video)
 
@@ -134,14 +134,14 @@ When `catbox_userhash` is supplied, the worker uploads the exact resolved image 
 #### LoRA Configuration
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `lora_presets` | `array` | No | `[]` | Select `assume_the_position`, `airblow`, or both for single-image requests |
+| `lora_presets` | `array` | No | `[]` | Up to two of `assume_the_position`, `airblow`, `clothes_on_off`, `sudden_outfit_change`, and `tittdrop` |
 
-All four preset files are baked into the image. No network volume is needed for these LoRAs. The old filename-based `lora_pairs` field is rejected.
+All preset files are baked into the image. `clothes_on_off` and `sudden_outfit_change` have a high-noise file only; their low-noise node is left at strength 0. No network volume is needed for these LoRAs. The old filename-based `lora_pairs` field is rejected.
 
 #### LoRA Preset Structure
 | Parameter | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
-| `name` | `string` | Yes | - | `assume_the_position` or `airblow` |
+| `name` | `string` | Yes | - | `assume_the_position`, `airblow`, `clothes_on_off`, `sudden_outfit_change`, or `tittdrop` |
 | `high_weight` | `float` | No | `0.8` | High-noise LoRA weight |
 | `low_weight` | `float` | No | `0.7` | Low-noise LoRA weight |
 

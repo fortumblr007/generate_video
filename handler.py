@@ -695,6 +695,11 @@ def apply_loras_to_workflow(prompt, preset_pairs, workflow_file):
                 f"Applied LOW LoRA {i+1}: {lora_pair['low']} "
                 f"(strength: {lora_pair.get('low_weight', 1.0)}) -> node {low_node_id}"
             )
+        elif i < len(low_preset_nodes):
+            # High-only presets keep the wired low node, with strength 0 so it does not affect the pass.
+            low_node_id = low_preset_nodes[i]
+            prompt[low_node_id]["inputs"]["strength_model"] = 0
+            logger.info(f"HIGH-only preset {i+1}: low node {low_node_id} strength 0")
 
 def handler(job):
     saved_input_url = None

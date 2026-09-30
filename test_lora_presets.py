@@ -42,6 +42,7 @@ class PresetTests(unittest.TestCase):
             {"lora_presets": [{"name": "airblow"}, {"name": "airblow"}]},
             {"lora_presets": [{"name": "airblow", "high_weight": True}]},
             {"lora_presets": [{"name": "airblow", "low_weight": float("nan")}]},
+            {"lora_presets": [{"name": "airblow"}, {"name": "assume_the_position"}, {"name": "tittdrop"}]},
         ]
         for job_input in bad_inputs:
             with self.subTest(job_input=job_input), self.assertRaises(ValueError):
@@ -68,6 +69,17 @@ class PresetTests(unittest.TestCase):
                 if len(names) == 2:
                     self.assertEqual([high_nodes[0], 0], prompt[high_nodes[1]]["inputs"]["model"])
                     self.assertEqual([low_nodes[0], 0], prompt[low_nodes[1]]["inputs"]["model"])
+
+    def test_high_only_preset_zeros_the_low_node(self):
+        pairs = resolve_lora_presets({"lora_presets": [{"name": "clothes_on_off", "high_weight": 0.9}]})
+        self.assertNotIn("low", pairs[0])
+        prompt = json.loads((WORKFLOW_DIR / "wan22_1lora.json").read_text(encoding="utf-8"))
+        placeholder = prompt["336"]["inputs"]["lora_name"]
+        apply_loras_to_workflow(prompt, pairs, "workflow/wan22_1lora.json")
+        self.assertEqual("Wan_ClothesOnOff_Trend.safetensors", prompt["282"]["inputs"]["lora_name"])
+        self.assertEqual(0.9, prompt["282"]["inputs"]["strength_model"])
+        self.assertEqual(placeholder, prompt["336"]["inputs"]["lora_name"])
+        self.assertEqual(0, prompt["336"]["inputs"]["strength_model"])
 
     def test_client_submits_presets(self):
         client = GenerateVideoClient("test-endpoint", "test-key")
